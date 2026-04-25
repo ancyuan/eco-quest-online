@@ -1,6 +1,8 @@
 import { Outlet, Link, createRootRoute, HeadContent, Scripts } from "@tanstack/react-router";
 
 import appCss from "../styles.css?url";
+import { AuthProvider, useAuth } from "@/lib/auth";
+import { Toaster } from "@/components/ui/sonner";
 
 function NotFoundComponent() {
   return (
@@ -29,11 +31,11 @@ export const Route = createRootRoute({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Lovable App" },
-      { name: "description", content: "Lovable Generated Project" },
-      { name: "author", content: "Lovable" },
-      { property: "og:title", content: "Lovable App" },
-      { property: "og:description", content: "Lovable Generated Project" },
+      { title: "Forest Guardian — Grow & Protect Your Forest" },
+      { name: "description", content: "Plant trees, defend nature, climb the global leaderboard. A calm eco-RPG about growing a thriving forest." },
+      { name: "author", content: "Forest Guardian" },
+      { property: "og:title", content: "Forest Guardian — Grow & Protect Your Forest" },
+      { property: "og:description", content: "Plant trees, defend nature, climb the global leaderboard." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
       { name: "twitter:site", content: "@Lovable" },
@@ -65,5 +67,65 @@ function RootShell({ children }: { children: React.ReactNode }) {
 }
 
 function RootComponent() {
-  return <Outlet />;
+  return (
+    <AuthProvider>
+      <SiteHeader />
+      <Outlet />
+      <Toaster />
+    </AuthProvider>
+  );
+}
+
+function SiteHeader() {
+  const { user, signOut } = useAuth();
+  return (
+    <header className="sticky top-0 z-40 border-b border-border bg-background/80 backdrop-blur-md">
+      <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4">
+        <Link to="/" className="flex items-center gap-2 font-semibold text-foreground">
+          <span className="text-xl">🌳</span>
+          <span className="tracking-tight">Forest Guardian</span>
+        </Link>
+        <nav className="flex items-center gap-1 text-sm">
+          <Link
+            to="/play"
+            className="rounded-md px-3 py-1.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+            activeProps={{ className: "rounded-md px-3 py-1.5 bg-secondary text-foreground font-medium" }}
+          >
+            Play
+          </Link>
+          <Link
+            to="/leaderboard"
+            className="rounded-md px-3 py-1.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+            activeProps={{ className: "rounded-md px-3 py-1.5 bg-secondary text-foreground font-medium" }}
+          >
+            Leaderboard
+          </Link>
+          {user ? (
+            <>
+              <Link
+                to="/profile"
+                className="rounded-md px-3 py-1.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                activeProps={{ className: "rounded-md px-3 py-1.5 bg-secondary text-foreground font-medium" }}
+              >
+                Profile
+              </Link>
+              <button
+                onClick={() => signOut()}
+                className="ml-1 rounded-md px-3 py-1.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+              >
+                Sign out
+              </button>
+            </>
+          ) : (
+            <Link
+              to="/auth"
+              className="ml-1 rounded-md bg-primary px-3 py-1.5 text-primary-foreground transition-colors hover:bg-primary/90"
+            >
+              Sign in
+            </Link>
+          )}
+        </nav>
+      </div>
+    </header>
+  );
 }
