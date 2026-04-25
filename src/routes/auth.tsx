@@ -127,7 +127,7 @@ function AuthPage() {
           <button
             onClick={handleWallet}
             disabled={walletBusy}
-            className="mb-4 flex w-full items-center justify-center gap-2 rounded-lg border border-border bg-gradient-to-r from-amber-500/10 to-orange-500/10 px-4 py-2.5 text-sm font-medium text-foreground transition-colors hover:from-amber-500/20 hover:to-orange-500/20 disabled:opacity-60"
+            className="mb-4 flex w-full items-center justify-center gap-2 rounded-lg border border-border bg-secondary px-4 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-accent disabled:opacity-60"
           >
             <span className="text-base">🔗</span>
             {walletBusy ? "Connecting wallet…" : "Continue with CORE Wallet"}
