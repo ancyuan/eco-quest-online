@@ -3,6 +3,7 @@ import { Outlet, Link, createRootRoute, HeadContent, Scripts } from "@tanstack/r
 import appCss from "../styles.css?url";
 import { AuthProvider, useAuth } from "@/lib/auth";
 import { Toaster } from "@/components/ui/sonner";
+import { disconnectWallet } from "@/lib/wallet";
 
 function NotFoundComponent() {
   return (
@@ -78,6 +79,11 @@ function RootComponent() {
 
 function SiteHeader() {
   const { user, signOut } = useAuth();
+  const isWalletUser = !!user?.user_metadata?.wallet_address;
+  const handleSignOut = async () => {
+    if (isWalletUser) await disconnectWallet();
+    await signOut();
+  };
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-background/80 backdrop-blur-md">
       <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4">
@@ -110,10 +116,10 @@ function SiteHeader() {
                 Profile
               </Link>
               <button
-                onClick={() => signOut()}
+                onClick={handleSignOut}
                 className="ml-1 rounded-md px-3 py-1.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
               >
-                Sign out
+                {isWalletUser ? "Disconnect" : "Sign out"}
               </button>
             </>
           ) : (

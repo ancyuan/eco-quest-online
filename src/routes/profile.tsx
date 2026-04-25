@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { toast } from "sonner";
+import { disconnectWallet } from "@/lib/wallet";
 
 export const Route = createFileRoute("/profile")({
   head: () => ({
@@ -26,6 +27,10 @@ function ProfilePage() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [name, setName] = useState("");
   const [saving, setSaving] = useState(false);
+  const [disconnecting, setDisconnecting] = useState(false);
+
+  const walletAddress = (user?.user_metadata?.wallet_address as string | undefined) ?? null;
+  const isWalletUser = !!walletAddress;
 
   useEffect(() => {
     if (!loading && !user) navigate({ to: "/auth" });
@@ -61,6 +66,21 @@ function ProfilePage() {
   if (loading || !user) {
     return <div className="p-10 text-center text-muted-foreground">Loading…</div>;
   }
+
+  const handleDisconnect = async () => {
+    setDisconnecting(true);
+    try {
+      await disconnectWallet();
+      await signOut();
+      toast.success("Wallet disconnected. You can pick another account next time.");
+      navigate({ to: "/" });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Failed to disconnect";
+      toast.error(msg);
+    } finally {
+      setDisconnecting(false);
+    }
+  };
 
   return (
     <main className="min-h-[calc(100vh-3.5rem)] bg-background px-4 py-10">
@@ -100,16 +120,32 @@ function ProfilePage() {
           </button>
 
           <div className="mt-6 border-t border-border pt-4">
-            <p className="text-xs text-muted-foreground">{user.email}</p>
-            <button
-              onClick={async () => {
-                await signOut();
-                navigate({ to: "/" });
-              }}
-              className="mt-3 w-full rounded-lg border border-border bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-secondary"
-            >
-              Sign out
-            </button>
+            {isWalletUser ? (
+              <p className="font-mono text-xs text-muted-foreground">
+                🔗 {walletAddress!.slice(0, 6)}…{walletAddress!.slice(-4)} · CORE
+              </p>
+            ) : (
+              <p className="text-xs text-muted-foreground">{user.email}</p>
+            )}
+            {isWalletUser ? (
+              <button
+                onClick={handleDisconnect}
+                disabled={disconnecting}
+                className="mt-3 w-full rounded-lg border border-border bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-secondary disabled:opacity-60"
+              >
+                {disconnecting ? "Disconnecting…" : "Disconnect Wallet"}
+              </button>
+            ) : (
+              <button
+                onClick={async () => {
+                  await signOut();
+                  navigate({ to: "/" });
+                }}
+                className="mt-3 w-full rounded-lg border border-border bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-secondary"
+              >
+                Sign out
+              </button>
+            )}
           </div>
         </div>
       </div>

@@ -55,6 +55,26 @@ export async function signMessage(address: string, message: string): Promise<str
   return sig;
 }
 
+/**
+ * Revoke the dApp's permission to access the currently connected wallet account(s).
+ * Supported by MetaMask and most modern EIP-1193 wallets via `wallet_revokePermissions`.
+ * Falls back silently if the wallet doesn't support it — the user can still switch
+ * accounts manually from the wallet UI.
+ */
+export async function disconnectWallet(): Promise<void> {
+  const provider = getProvider();
+  if (!provider) return;
+  try {
+    await provider.request({
+      method: "wallet_revokePermissions",
+      params: [{ eth_accounts: {} }],
+    });
+  } catch {
+    // Older wallets / non-MetaMask providers may not support revokePermissions.
+    // That's fine — clearing the Supabase session is still enough for our app.
+  }
+}
+
 export function buildSiweMessage(params: {
   address: string;
   nonce: string;
