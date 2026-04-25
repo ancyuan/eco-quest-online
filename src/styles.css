@@ -108,25 +108,31 @@
 }
 
 .dark {
-  --background: oklch(0.129 0.042 264.695);
-  --foreground: oklch(0.984 0.003 247.858);
-  --card: oklch(0.208 0.042 265.755);
-  --card-foreground: oklch(0.984 0.003 247.858);
-  --popover: oklch(0.208 0.042 265.755);
-  --popover-foreground: oklch(0.984 0.003 247.858);
-  --primary: oklch(0.929 0.013 255.508);
-  --primary-foreground: oklch(0.208 0.042 265.755);
-  --secondary: oklch(0.279 0.041 260.031);
-  --secondary-foreground: oklch(0.984 0.003 247.858);
-  --muted: oklch(0.279 0.041 260.031);
-  --muted-foreground: oklch(0.704 0.04 256.788);
-  --accent: oklch(0.279 0.041 260.031);
-  --accent-foreground: oklch(0.984 0.003 247.858);
-  --destructive: oklch(0.704 0.191 22.216);
-  --destructive-foreground: oklch(0.984 0.003 247.858);
+  /* Forest Guardian — night mode (deep forest, mossy accents) */
+  --background: oklch(0.18 0.02 160);
+  --foreground: oklch(0.95 0.02 95);
+  --card: oklch(0.23 0.025 160);
+  --card-foreground: oklch(0.95 0.02 95);
+  --popover: oklch(0.23 0.025 160);
+  --popover-foreground: oklch(0.95 0.02 95);
+  --primary: oklch(0.7 0.15 150);
+  --primary-foreground: oklch(0.18 0.02 160);
+  --primary-glow: oklch(0.78 0.16 150);
+  --secondary: oklch(0.28 0.03 160);
+  --secondary-foreground: oklch(0.95 0.02 95);
+  --muted: oklch(0.26 0.025 160);
+  --muted-foreground: oklch(0.7 0.03 150);
+  --accent: oklch(0.45 0.08 220);
+  --accent-foreground: oklch(0.95 0.02 95);
+  --destructive: oklch(0.65 0.22 27);
+  --destructive-foreground: oklch(0.99 0.01 95);
   --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.551 0.027 264.364);
+  --input: oklch(1 0 0 / 12%);
+  --ring: oklch(0.7 0.15 150);
+  --gradient-forest: linear-gradient(135deg, oklch(0.28 0.04 160), oklch(0.32 0.06 220));
+  --gradient-hero: linear-gradient(160deg, oklch(0.4 0.1 150), oklch(0.55 0.13 150));
+  --shadow-soft: 0 8px 24px -8px oklch(0 0 0 / 0.4);
+  --shadow-card: 0 2px 12px -4px oklch(0 0 0 / 0.3);
   --chart-1: oklch(0.488 0.243 264.376);
   --chart-2: oklch(0.696 0.17 162.48);
   --chart-3: oklch(0.769 0.188 70.08);
@@ -151,4 +157,44 @@
     background-color: var(--color-background);
     color: var(--color-foreground);
   }
+}
+
+/* --- Forest Guardian motion --- */
+@keyframes confetti-fall {
+  0% {
+    transform: translate(0, 0) rotate(0deg) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(var(--dx), calc(var(--dy) + 240px)) rotate(var(--rot)) scale(0.6);
+    opacity: 0;
+  }
+}
+
+@keyframes plant-pop {
+  0% { transform: scale(0); opacity: 0; }
+  60% { transform: scale(1.15); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes harvest-burst {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.3); filter: brightness(1.4); }
+  100% { transform: scale(0); opacity: 0; }
+}
+
+.tile-pop { animation: plant-pop 350ms ease-out; }
+.tile-harvest { animation: harvest-burst 400ms ease-in forwards; }
+
+/* Day/night gradient cycle on the forest grid background */
+@keyframes daynight {
+  0%   { background: linear-gradient(135deg, oklch(0.93 0.04 150), oklch(0.85 0.09 220)); }   /* dawn */
+  25%  { background: linear-gradient(135deg, oklch(0.95 0.05 95),  oklch(0.88 0.1 200)); }    /* day */
+  50%  { background: linear-gradient(135deg, oklch(0.78 0.08 60),  oklch(0.6 0.12 30)); }     /* sunset */
+  75%  { background: linear-gradient(135deg, oklch(0.35 0.06 260), oklch(0.25 0.05 280)); }   /* night */
+  100% { background: linear-gradient(135deg, oklch(0.93 0.04 150), oklch(0.85 0.09 220)); }
+}
+
+.daynight-bg {
+  animation: daynight 240s linear infinite;
 }
