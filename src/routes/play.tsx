@@ -12,6 +12,8 @@ import {
   THREAT_WINDOW_MS,
   THREAT_SPAWN_PROB,
   TICK_MS,
+  AUTO_HARVEST_MS,
+  OFFLINE_MAX_MS,
   TREES,
   THREATS,
   computeStage,
@@ -21,6 +23,9 @@ import {
   type Tile,
   type TreeKind,
 } from "@/lib/game";
+import { usePreferences, ensureNotificationPermission, notify } from "@/lib/preferences";
+import { Confetti } from "@/components/Confetti";
+import { Tutorial } from "@/components/Tutorial";
 
 export const Route = createFileRoute("/play")({
   head: () => ({
@@ -35,6 +40,7 @@ export const Route = createFileRoute("/play")({
 function PlayPage() {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
+  const { prefs, update: updatePrefs } = usePreferences();
 
   const [tiles, setTiles] = useState<Tile[]>(() =>
     Array.from({ length: GRID_SIZE }, (_, i) => ({ index: i }))
@@ -47,6 +53,16 @@ function PlayPage() {
   const [hydrated, setHydrated] = useState(false);
   const lastEnergyTickRef = useRef<number>(Date.now());
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastAutoHarvestRef = useRef<number>(Date.now());
+  const lastNotifiedRef = useRef<Record<number, number>>({});
+  const [confettiTrigger, setConfettiTrigger] = useState(0);
+  const [animatingTiles, setAnimatingTiles] = useState<Record<number, "pop" | "harvest">>({});
+  const [showTutorial, setShowTutorial] = useState(false);
+
+  // Tutorial gate — show first time
+  useEffect(() => {
+    if (hydrated && !prefs.tutorial_done) setShowTutorial(true);
+  }, [hydrated, prefs.tutorial_done]);
 
   // ----- Auth gate -----
   useEffect(() => {
@@ -62,15 +78,23 @@ function PlayPage() {
         supabase.from("profiles").select("oxygen, trees_saved").eq("id", user.id).maybeSingle(),
       ]);
       if (forest) {
-        setEnergy(forest.energy);
-        const loaded = (forest.tiles as Tile[] | null) ?? [];
-        // Re-hydrate tile slots; recompute stages
+        // Offline energy catch-up
+        const lastTickMs = forest.last_tick ? new Date(forest.last_tick).getTime() : Date.now();
         const now = Date.now();
+        const offlineMs = Math.max(0, Math.min(now - lastTickMs, OFFLINE_MAX_MS));
+        const energyGained = Math.floor(offlineMs / ENERGY_REGEN_MS);
+        const startEnergy = Math.min(ENERGY_MAX, forest.energy + energyGained);
+        setEnergy(startEnergy);
+
+        const loaded = (forest.tiles as Tile[] | null) ?? [];
+        // Re-hydrate tile slots; recompute stages and decay any expired threats
         const fresh: Tile[] = Array.from({ length: GRID_SIZE }, (_, i) => {
           const found = loaded.find((t) => t.index === i);
           if (!found || !found.kind || !found.plantedAt) return { index: i };
-          // drop expired threats
-          const threat = found.threat && found.threatExpiresAt && found.threatExpiresAt > now ? found.threat : undefined;
+          // drop expired threats — tree dies if it had an unhandled threat that expired
+          const threatExpired = found.threat && found.threatExpiresAt && found.threatExpiresAt <= now;
+          if (threatExpired) return { index: i };
+          const threat = found.threat;
           return {
             index: i,
             kind: found.kind,
@@ -81,6 +105,10 @@ function PlayPage() {
           };
         });
         setTiles(fresh);
+
+        if (energyGained > 0) {
+          toast.success(`Welcome back! +${energyGained} 💧 energy regenerated while away`);
+        }
       }
       if (profile) {
         setOxygen(profile.oxygen);
@@ -136,11 +164,17 @@ function PlayPage() {
           let updated = { ...t, stage };
           // Random threat spawn on mature trees
           if (stage === "mature" && !t.threat && Math.random() < THREAT_SPAWN_PROB) {
+            const newThreat = randomThreat();
             updated = {
               ...updated,
-              threat: randomThreat(),
+              threat: newThreat,
               threatExpiresAt: now + THREAT_WINDOW_MS,
             };
+            // Browser notification (rate-limited per tile to once per 30s)
+            if (prefs.notifications_enabled && (now - (lastNotifiedRef.current[t.index] ?? 0)) > 30_000) {
+              lastNotifiedRef.current[t.index] = now;
+              notify("🌳 Forest Guardian", `${THREATS[newThreat].emoji} ${THREATS[newThreat].label} attacking your tree!`);
+            }
           }
           return updated;
         });
@@ -152,9 +186,31 @@ function PlayPage() {
         lastEnergyTickRef.current = now;
         setEnergy((e) => Math.min(ENERGY_MAX, e + 1));
       }
+
+      // Auto-harvest (opt-in)
+      if (prefs.auto_harvest && now - lastAutoHarvestRef.current >= AUTO_HARVEST_MS) {
+        lastAutoHarvestRef.current = now;
+        setTiles((prev) => {
+          let oxygenGained = 0;
+          let energyGained = 0;
+          const next = prev.map((t) => {
+            if (t.kind && t.stage === "mature" && !t.threat) {
+              oxygenGained += Math.floor(TREES[t.kind].oxygen / 2); // half yield for auto
+              energyGained += 1;
+              return { index: t.index };
+            }
+            return t;
+          });
+          if (oxygenGained > 0) {
+            setOxygen((o) => o + oxygenGained);
+            setEnergy((e) => Math.min(ENERGY_MAX, e + energyGained));
+          }
+          return next;
+        });
+      }
     }, TICK_MS);
     return () => clearInterval(interval);
-  }, [hydrated]);
+  }, [hydrated, prefs.auto_harvest, prefs.notifications_enabled]);
 
   // ----- Persist on changes -----
   useEffect(() => {
@@ -177,6 +233,14 @@ function PlayPage() {
       const gain = TREES[tile.kind].oxygen;
       setOxygen((o) => o + gain);
       setEnergy((e) => Math.min(ENERGY_MAX, e + 2));
+      setAnimatingTiles((a) => ({ ...a, [tile.index]: "harvest" }));
+      setConfettiTrigger(Date.now());
+      setTimeout(() => {
+        setAnimatingTiles((a) => {
+          const { [tile.index]: _omit, ...rest } = a;
+          return rest;
+        });
+      }, 400);
       setTiles((prev) => prev.map((t) => (t.index === tile.index ? { index: t.index } : t)));
       setFact(randomFact());
       toast.success(`+${gain} 💨 oxygen, +2 💧 energy`);
@@ -190,6 +254,13 @@ function PlayPage() {
       }
       const now = Date.now();
       setEnergy((e) => e - PLANT_COST);
+      setAnimatingTiles((a) => ({ ...a, [tile.index]: "pop" }));
+      setTimeout(() => {
+        setAnimatingTiles((a) => {
+          const { [tile.index]: _omit, ...rest } = a;
+          return rest;
+        });
+      }, 350);
       setTiles((prev) =>
         prev.map((t) =>
           t.index === tile.index
@@ -225,9 +296,9 @@ function PlayPage() {
       <div className="mx-auto max-w-2xl">
         {/* HUD */}
         <div className="mb-4 grid grid-cols-3 gap-2">
-          <Stat icon="💧" label="Energy" value={`${energy}/${ENERGY_MAX}`} />
-          <Stat icon="💨" label="Oxygen" value={oxygen} />
-          <Stat icon="🌳" label="Saved" value={treesSaved} />
+          <Stat icon="💧" label="Energy" value={`${energy}/${ENERGY_MAX}`} tooltip="Spend on planting. Regenerates 1 every 15s." />
+          <Stat icon="💨" label="Oxygen" value={oxygen} tooltip="Lifetime score from harvesting mature trees." />
+          <Stat icon="🌳" label="Saved" value={treesSaved} tooltip="Trees you defended from fire, loggers, and pests." />
         </div>
 
         {/* Energy bar */}
@@ -264,14 +335,16 @@ function PlayPage() {
 
         {/* Forest grid */}
         <div
-          className="grid gap-1.5 rounded-2xl border border-border p-3 shadow-[var(--shadow-card)]"
-          style={{
-            gridTemplateColumns: "repeat(6, minmax(0, 1fr))",
-            background: "var(--gradient-forest)",
-          }}
+          className="daynight-bg grid gap-1.5 rounded-2xl border border-border p-3 shadow-[var(--shadow-card)]"
+          style={{ gridTemplateColumns: "repeat(6, minmax(0, 1fr))" }}
         >
           {tiles.map((tile) => (
-            <TileButton key={tile.index} tile={tile} onClick={() => handleTileClick(tile)} />
+            <TileButton
+              key={tile.index}
+              tile={tile}
+              animation={animatingTiles[tile.index]}
+              onClick={() => handleTileClick(tile)}
+            />
           ))}
         </div>
 
@@ -295,6 +368,35 @@ function PlayPage() {
         <p className="mt-3 text-center text-xs text-muted-foreground">
           Tap empty tile to plant • Tap mature 🌳 to harvest oxygen • Tap threats fast to defend
         </p>
+
+        {/* Quick toggles */}
+        <div className="mt-3 flex flex-wrap items-center justify-center gap-2 text-xs">
+          <button
+            onClick={() => updatePrefs({ auto_harvest: !prefs.auto_harvest })}
+            className={`rounded-full border border-border px-3 py-1 transition-colors ${
+              prefs.auto_harvest ? "bg-primary text-primary-foreground" : "bg-card text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {prefs.auto_harvest ? "✓ Auto-harvest on" : "Auto-harvest off"}
+          </button>
+          <button
+            onClick={async () => {
+              if (!prefs.notifications_enabled) {
+                const ok = await ensureNotificationPermission();
+                if (!ok) {
+                  toast.error("Browser notifications blocked");
+                  return;
+                }
+              }
+              updatePrefs({ notifications_enabled: !prefs.notifications_enabled });
+            }}
+            className={`rounded-full border border-border px-3 py-1 transition-colors ${
+              prefs.notifications_enabled ? "bg-primary text-primary-foreground" : "bg-card text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {prefs.notifications_enabled ? "🔔 Notifs on" : "🔕 Notifs off"}
+          </button>
+        </div>
       </div>
 
       {/* Eco fact toast */}
@@ -317,21 +419,50 @@ function PlayPage() {
           </div>
         </div>
       )}
+
+      {/* Confetti on harvest */}
+      <Confetti trigger={confettiTrigger} />
+
+      {/* First-time tutorial */}
+      {showTutorial && (
+        <Tutorial
+          onDone={() => {
+            setShowTutorial(false);
+            updatePrefs({ tutorial_done: true });
+          }}
+        />
+      )}
     </main>
   );
 }
 
-function Stat({ icon, label, value }: { icon: string; label: string; value: string | number }) {
+function Stat({ icon, label, value, tooltip }: { icon: string; label: string; value: string | number; tooltip?: string }) {
   return (
-    <div className="rounded-xl border border-border bg-card px-3 py-2 text-center shadow-[var(--shadow-card)]">
+    <div
+      className="group relative rounded-xl border border-border bg-card px-3 py-2 text-center shadow-[var(--shadow-card)]"
+      title={tooltip}
+    >
       <div className="text-lg">{icon}</div>
       <div className="text-base font-bold tabular-nums text-foreground">{value}</div>
       <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</div>
+      {tooltip && (
+        <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-1 w-48 -translate-x-1/2 rounded-md border border-border bg-popover p-2 text-[11px] leading-snug text-popover-foreground opacity-0 shadow-[var(--shadow-card)] transition-opacity group-hover:opacity-100">
+          {tooltip}
+        </div>
+      )}
     </div>
   );
 }
 
-function TileButton({ tile, onClick }: { tile: Tile; onClick: () => void }) {
+function TileButton({
+  tile,
+  onClick,
+  animation,
+}: {
+  tile: Tile;
+  onClick: () => void;
+  animation?: "pop" | "harvest";
+}) {
   const empty = !tile.kind;
   const threatened = !!tile.threat;
   const mature = tile.stage === "mature";
@@ -341,7 +472,12 @@ function TileButton({ tile, onClick }: { tile: Tile; onClick: () => void }) {
 
   if (tile.kind && tile.stage) {
     const emoji = TREES[tile.kind].emoji[tile.stage];
-    content = <span className={mature ? "text-2xl sm:text-3xl" : "text-xl sm:text-2xl"}>{emoji}</span>;
+    const animClass = animation === "pop" ? "tile-pop" : animation === "harvest" ? "tile-harvest" : "";
+    content = (
+      <span className={`${mature ? "text-2xl sm:text-3xl" : "text-xl sm:text-2xl"} inline-block ${animClass}`}>
+        {emoji}
+      </span>
+    );
     bg = "bg-background/70";
   }
 
