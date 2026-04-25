@@ -14,7 +14,57 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      forest_states: {
+        Row: {
+          energy: number
+          last_tick: string
+          tiles: Json
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          energy?: number
+          last_tick?: string
+          tiles?: Json
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          energy?: number
+          last_tick?: string
+          tiles?: Json
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          display_name: string
+          id: string
+          oxygen: number
+          trees_saved: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          display_name?: string
+          id: string
+          oxygen?: number
+          trees_saved?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          display_name?: string
+          id?: string
+          oxygen?: number
+          trees_saved?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
