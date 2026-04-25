@@ -40,27 +40,39 @@ export type Database = {
       }
       profiles: {
         Row: {
+          auto_harvest: boolean
           created_at: string
+          dark_mode: boolean
           display_name: string
           id: string
+          notifications_enabled: boolean
           oxygen: number
           trees_saved: number
+          tutorial_done: boolean
           updated_at: string
         }
         Insert: {
+          auto_harvest?: boolean
           created_at?: string
+          dark_mode?: boolean
           display_name?: string
           id: string
+          notifications_enabled?: boolean
           oxygen?: number
           trees_saved?: number
+          tutorial_done?: boolean
           updated_at?: string
         }
         Update: {
+          auto_harvest?: boolean
           created_at?: string
+          dark_mode?: boolean
           display_name?: string
           id?: string
+          notifications_enabled?: boolean
           oxygen?: number
           trees_saved?: number
+          tutorial_done?: boolean
           updated_at?: string
         }
         Relationships: []

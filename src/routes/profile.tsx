@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { toast } from "sonner";
 import { disconnectWallet } from "@/lib/wallet";
+import { usePreferences } from "@/lib/preferences";
 
 export const Route = createFileRoute("/profile")({
   head: () => ({
@@ -24,10 +25,12 @@ interface Profile {
 function ProfilePage() {
   const { user, loading, signOut } = useAuth();
   const navigate = useNavigate();
+  const { prefs, update: updatePrefs } = usePreferences();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [name, setName] = useState("");
   const [saving, setSaving] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
+  const [resetting, setResetting] = useState(false);
 
   const walletAddress = (user?.user_metadata?.wallet_address as string | undefined) ?? null;
   const isWalletUser = !!walletAddress;
@@ -82,6 +85,19 @@ function ProfilePage() {
     }
   };
 
+  const handleReset = async () => {
+    if (!user) return;
+    if (!confirm("Reset your forest? Tiles and energy go back to start. Oxygen & trees-saved are kept.")) return;
+    setResetting(true);
+    const { error } = await supabase
+      .from("forest_states")
+      .update({ energy: 10, tiles: [], last_tick: new Date().toISOString() })
+      .eq("user_id", user.id);
+    setResetting(false);
+    if (error) toast.error(error.message);
+    else toast.success("Forest reset. Plant fresh seeds 🌱");
+  };
+
   return (
     <main className="min-h-[calc(100vh-3.5rem)] bg-background px-4 py-10">
       <div className="mx-auto max-w-xl">
@@ -119,6 +135,39 @@ function ProfilePage() {
             {saving ? "Saving…" : "Save changes"}
           </button>
 
+          {/* Preferences */}
+          <div className="mt-6 space-y-3 border-t border-border pt-4">
+            <h3 className="text-sm font-semibold text-foreground">Preferences</h3>
+            <PrefRow
+              label="🌙 Dark mode"
+              hint="Calmer palette for night sessions"
+              checked={prefs.dark_mode}
+              onChange={(v) => updatePrefs({ dark_mode: v })}
+            />
+            <PrefRow
+              label="🌾 Auto-harvest"
+              hint="Mature trees auto-harvest every minute (half oxygen yield)"
+              checked={prefs.auto_harvest}
+              onChange={(v) => updatePrefs({ auto_harvest: v })}
+            />
+            <PrefRow
+              label="🔔 Browser notifications"
+              hint="Alert when threats appear and the tab is hidden"
+              checked={prefs.notifications_enabled}
+              onChange={(v) => updatePrefs({ notifications_enabled: v })}
+            />
+          </div>
+
+          <div className="mt-6 border-t border-border pt-4">
+            <button
+              onClick={handleReset}
+              disabled={resetting}
+              className="w-full rounded-lg border border-border bg-background px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground disabled:opacity-60"
+            >
+              {resetting ? "Resetting…" : "🔁 Reset forest"}
+            </button>
+          </div>
+
           <div className="mt-6 border-t border-border pt-4">
             {isWalletUser ? (
               <p className="font-mono text-xs text-muted-foreground">
@@ -150,5 +199,32 @@ function ProfilePage() {
         </div>
       </div>
     </main>
+  );
+}
+
+function PrefRow({
+  label,
+  hint,
+  checked,
+  onChange,
+}: {
+  label: string;
+  hint: string;
+  checked: boolean;
+  onChange: (v: boolean) => void;
+}) {
+  return (
+    <label className="flex cursor-pointer items-start justify-between gap-3 rounded-lg border border-border bg-secondary/30 px-3 py-2 transition-colors hover:bg-secondary/60">
+      <div className="min-w-0 flex-1">
+        <div className="text-sm font-medium text-foreground">{label}</div>
+        <div className="text-xs text-muted-foreground">{hint}</div>
+      </div>
+      <input
+        type="checkbox"
+        className="mt-1 h-4 w-4 cursor-pointer accent-[var(--color-primary)]"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+      />
+    </label>
   );
 }

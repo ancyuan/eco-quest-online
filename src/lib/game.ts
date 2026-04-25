@@ -21,6 +21,8 @@ export const ENERGY_REGEN_MS = 15_000; // +1 every 15s
 export const THREAT_WINDOW_MS = 12_000;
 export const THREAT_SPAWN_PROB = 0.06; // per tick per mature tree
 export const TICK_MS = 2_000;
+export const AUTO_HARVEST_MS = 60_000; // auto-harvest mature trees every minute when enabled
+export const OFFLINE_MAX_MS = 12 * 60 * 60_000; // cap offline catch-up at 12h
 
 export const TREES: Record<TreeKind, { emoji: Record<GrowthStage, string>; oxygen: number; label: string }> = {
   oak:    { emoji: { seed: "🌰", sapling: "🌿", mature: "🌳" }, oxygen: 22, label: "Oak" },
