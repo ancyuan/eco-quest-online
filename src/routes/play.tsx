@@ -26,6 +26,7 @@ import {
 import { usePreferences, ensureNotificationPermission, notify } from "@/lib/preferences";
 import { Confetti } from "@/components/Confetti";
 import { Tutorial } from "@/components/Tutorial";
+import { Encyclopedia } from "@/components/Encyclopedia";
 
 export const Route = createFileRoute("/play")({
   head: () => ({
@@ -58,6 +59,7 @@ function PlayPage() {
   const [confettiTrigger, setConfettiTrigger] = useState(0);
   const [animatingTiles, setAnimatingTiles] = useState<Record<number, "pop" | "harvest">>({});
   const [showTutorial, setShowTutorial] = useState(false);
+  const [showEncyclopedia, setShowEncyclopedia] = useState(false);
 
   // Tutorial gate — show first time
   useEffect(() => {
@@ -357,6 +359,13 @@ function PlayPage() {
           >
             🌱 Quick plant ({PLANT_COST} 💧)
           </button>
+          <button
+            onClick={() => setShowEncyclopedia(true)}
+            className="rounded-lg border border-border bg-card px-4 py-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-secondary"
+            title="Learn about trees"
+          >
+            📚
+          </button>
           <Link
             to="/leaderboard"
             className="rounded-lg border border-border bg-card px-4 py-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-secondary"
@@ -432,6 +441,9 @@ function PlayPage() {
           }}
         />
       )}
+
+      {/* Encyclopedia modal */}
+      <Encyclopedia open={showEncyclopedia} onOpenChange={setShowEncyclopedia} />
     </main>
   );
 }

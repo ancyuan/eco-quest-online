@@ -47,6 +47,17 @@ export const ECO_FACTS = [
   "Sakura blossoms signal a healthy, balanced ecosystem.",
 ];
 
+export interface EncyclopediaEntry {
+  tree_kind: TreeKind;
+  label: string;
+  emoji: string;
+  oxygen_yield: number;
+  lore: string;
+  facts: string[];
+  habitat: string;
+  impact: string;
+}
+
 export function computeStage(plantedAt: number, now: number): GrowthStage {
   const age = now - plantedAt;
   if (age >= STAGE_MS * 2) return "mature";
