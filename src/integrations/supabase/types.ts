@@ -14,23 +14,68 @@ export type Database = {
   }
   public: {
     Tables: {
+      forest_encyclopedia: {
+        Row: {
+          created_at: string
+          emoji: string
+          facts: Json
+          habitat: string
+          impact: string
+          label: string
+          lore: string
+          oxygen_yield: number
+          tree_kind: string
+        }
+        Insert: {
+          created_at?: string
+          emoji: string
+          facts?: Json
+          habitat: string
+          impact: string
+          label: string
+          lore: string
+          oxygen_yield: number
+          tree_kind: string
+        }
+        Update: {
+          created_at?: string
+          emoji?: string
+          facts?: Json
+          habitat?: string
+          impact?: string
+          label?: string
+          lore?: string
+          oxygen_yield?: number
+          tree_kind?: string
+        }
+        Relationships: []
+      }
       forest_states: {
         Row: {
+          biome_zones: Json
           energy: number
+          feed_log: Json
+          grid_size: number
           last_tick: string
           tiles: Json
           updated_at: string
           user_id: string
         }
         Insert: {
+          biome_zones?: Json
           energy?: number
+          feed_log?: Json
+          grid_size?: number
           last_tick?: string
           tiles?: Json
           updated_at?: string
           user_id: string
         }
         Update: {
+          biome_zones?: Json
           energy?: number
+          feed_log?: Json
+          grid_size?: number
           last_tick?: string
           tiles?: Json
           updated_at?: string
@@ -40,6 +85,7 @@ export type Database = {
       }
       profiles: {
         Row: {
+          achievements: string[]
           auto_harvest: boolean
           created_at: string
           dark_mode: boolean
@@ -49,9 +95,13 @@ export type Database = {
           oxygen: number
           trees_saved: number
           tutorial_done: boolean
+          unlocked_biomes: string[]
+          unlocked_grid_size: number
+          unlocked_trees: string[]
           updated_at: string
         }
         Insert: {
+          achievements?: string[]
           auto_harvest?: boolean
           created_at?: string
           dark_mode?: boolean
@@ -61,9 +111,13 @@ export type Database = {
           oxygen?: number
           trees_saved?: number
           tutorial_done?: boolean
+          unlocked_biomes?: string[]
+          unlocked_grid_size?: number
+          unlocked_trees?: string[]
           updated_at?: string
         }
         Update: {
+          achievements?: string[]
           auto_harvest?: boolean
           created_at?: string
           dark_mode?: boolean
@@ -73,6 +127,9 @@ export type Database = {
           oxygen?: number
           trees_saved?: number
           tutorial_done?: boolean
+          unlocked_biomes?: string[]
+          unlocked_grid_size?: number
+          unlocked_trees?: string[]
           updated_at?: string
         }
         Relationships: []
