@@ -12,11 +12,21 @@ import {
   defaultBiomeZones, biomeForTile, canPlantInBiome, harvestYield,
   evaluateUnlocks, canFeed, feedProgress, isReadyForAncient,
   type Tile, type TreeKind, type Biome, type FeedLog, type AchievementStats,
+  // Phase 3
+  computeStageEff, harvestYieldFull, synergyMultiplier,
+  effectiveMaxEnergy, effectiveFeedCost, effectiveThreatWindowMs,
+  computeLevel, XP_PLANT, XP_HARVEST, XP_HARVEST_ANCIENT, XP_DEFEND, XP_FEED,
+  SKILL_TREE, aggregateCompanionEffects, evaluateCompanionUnlocks, bumpTally,
+  WEATHERS,
+  type SkillRanks, type CompanionId, type HarvestTally,
 } from "@/lib/game";
 import { usePreferences, ensureNotificationPermission, notify } from "@/lib/preferences";
 import { Confetti } from "@/components/Confetti";
 import { Tutorial } from "@/components/Tutorial";
 import { Encyclopedia } from "@/components/Encyclopedia";
+import { SkillTree } from "@/components/SkillTree";
+import { CompanionPicker } from "@/components/CompanionPicker";
+import { useWeather } from "@/lib/weather";
 
 export const Route = createFileRoute("/play")({
   head: () => ({
