@@ -50,6 +50,8 @@ function PlayPage() {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
   const { prefs, update: updatePrefs } = usePreferences();
+  const weatherState = useWeather();
+  const weather = weatherState.weather;
 
   const [gridSize, setGridSize] = useState(6);
   const [biomeZones, setBiomeZones] = useState<Record<number, Biome>>({});
@@ -80,6 +82,23 @@ function PlayPage() {
   const [showTutorial, setShowTutorial] = useState(false);
   const [showEncyclopedia, setShowEncyclopedia] = useState(false);
   const [feedingMode, setFeedingMode] = useState(false);
+  const [showSkills, setShowSkills] = useState(false);
+  const [showCompanions, setShowCompanions] = useState(false);
+
+  // Phase 3 player progression
+  const [xp, setXp] = useState(0);
+  const [skillPoints, setSkillPoints] = useState(0);
+  const [skills, setSkills] = useState<SkillRanks>({});
+  const [unlockedCompanions, setUnlockedCompanions] = useState<CompanionId[]>([]);
+  const [activeCompanions, setActiveCompanions] = useState<CompanionId[]>([]);
+  const [harvestTally, setHarvestTally] = useState<HarvestTally>({});
+  const lastAutoDefendRef = useRef<number>(Date.now());
+  const lastLevelRef = useRef<number>(1);
+
+  const levelInfo = useMemo(() => computeLevel(xp), [xp]);
+  const maxEnergy = useMemo(() => effectiveMaxEnergy(skills), [skills]);
+  const feedCost = useMemo(() => effectiveFeedCost(skills), [skills]);
+  const compEff = useMemo(() => aggregateCompanionEffects(activeCompanions), [activeCompanions]);
 
   // Tutorial gate
   useEffect(() => {
