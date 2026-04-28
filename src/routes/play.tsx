@@ -516,6 +516,7 @@ function PlayPage() {
       ? selectedKind
       : (progression.unlocked_trees.find(k => canPlantInBiome(k, biome)) ?? selectedKind);
     setEnergy(e => e - PLANT_COST);
+    setXp(x => x + XP_PLANT);
     speciesPlantedRef.current.add(kind);
     const now = Date.now();
     setTiles(prev => prev.map(t =>
