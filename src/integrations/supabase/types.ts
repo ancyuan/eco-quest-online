@@ -86,9 +86,11 @@ export type Database = {
       profiles: {
         Row: {
           achievements: string[]
+          acorns: number
           active_companions: string[]
           auto_harvest: boolean
           created_at: string
+          daily_quests: Json
           dark_mode: boolean
           display_name: string
           harvest_tally: Json
@@ -98,6 +100,9 @@ export type Database = {
           oxygen: number
           skill_points: number
           skills: Json
+          streak_best: number
+          streak_current: number
+          streak_last_claim: string | null
           trees_saved: number
           tutorial_done: boolean
           unlocked_biomes: string[]
@@ -109,9 +114,11 @@ export type Database = {
         }
         Insert: {
           achievements?: string[]
+          acorns?: number
           active_companions?: string[]
           auto_harvest?: boolean
           created_at?: string
+          daily_quests?: Json
           dark_mode?: boolean
           display_name?: string
           harvest_tally?: Json
@@ -121,6 +128,9 @@ export type Database = {
           oxygen?: number
           skill_points?: number
           skills?: Json
+          streak_best?: number
+          streak_current?: number
+          streak_last_claim?: string | null
           trees_saved?: number
           tutorial_done?: boolean
           unlocked_biomes?: string[]
@@ -132,9 +142,11 @@ export type Database = {
         }
         Update: {
           achievements?: string[]
+          acorns?: number
           active_companions?: string[]
           auto_harvest?: boolean
           created_at?: string
+          daily_quests?: Json
           dark_mode?: boolean
           display_name?: string
           harvest_tally?: Json
@@ -144,6 +156,9 @@ export type Database = {
           oxygen?: number
           skill_points?: number
           skills?: Json
+          streak_best?: number
+          streak_current?: number
+          streak_last_claim?: string | null
           trees_saved?: number
           tutorial_done?: boolean
           unlocked_biomes?: string[]
