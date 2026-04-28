@@ -379,8 +379,10 @@ function PlayPage() {
 
   // Persist on changes
   useEffect(() => {
-    persist(tiles, energy, oxygen, treesSaved, gridSize, biomeZones, feedLog, progression);
-  }, [tiles, energy, oxygen, treesSaved, gridSize, biomeZones, feedLog, progression, persist]);
+    persist(tiles, energy, oxygen, treesSaved, gridSize, biomeZones, feedLog, progression,
+            xp, skillPoints, skills, unlockedCompanions, activeCompanions, harvestTally);
+  }, [tiles, energy, oxygen, treesSaved, gridSize, biomeZones, feedLog, progression,
+      xp, skillPoints, skills, unlockedCompanions, activeCompanions, harvestTally, persist]);
 
   // Actions
   const handleTileClick = (tile: Tile) => {
