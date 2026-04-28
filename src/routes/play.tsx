@@ -417,13 +417,14 @@ function PlayPage() {
         toast.error("Feed only works on mature trees");
         return;
       }
-      if (energy < FEED_COST) { toast.error(`Need ${FEED_COST} 💧 to feed`); return; }
+      if (energy < feedCost) { toast.error(`Need ${feedCost} 💧 to feed`); return; }
       if (!canFeed(feedLog, tile.index, Date.now())) {
         toast.error("This tree was fed recently. Wait a bit.");
         return;
       }
       const now = Date.now();
-      setEnergy(e => e - FEED_COST);
+      setEnergy(e => e - feedCost);
+      setXp(x => x + XP_FEED);
       setFeedLog(prev => {
         const next = { ...prev, [tile.index]: [...(prev[tile.index] ?? []), now] };
         // promote to ancient if ritual complete
@@ -449,6 +450,7 @@ function PlayPage() {
         t.index === tile.index ? { ...t, threat: undefined, threatExpiresAt: undefined } : t
       ));
       setTreesSaved(s => s + 1);
+      setXp(x => x + XP_DEFEND);
       toast.success(`Saved your tree from ${THREATS[tile.threat].label.toLowerCase()}!`);
       return;
     }
@@ -457,9 +459,17 @@ function PlayPage() {
     if (tile.kind && (tile.stage === "mature" || tile.stage === "ancient")) {
       const biome = biomeForTile(biomeZones, tile.index);
       const isAncient = tile.stage === "ancient";
-      const gain = harvestYield(tile.kind, biome, isAncient);
+      const synergy = synergyMultiplier(tiles, gridSize, tile.index, tile.kind);
+      const gain = harvestYieldFull({
+        kind: tile.kind, biome, isAncient,
+        weather, skills, companions: activeCompanions, synergyMul: synergy,
+      });
       setOxygen(o => o + gain);
-      setEnergy(e => Math.min(ENERGY_MAX, e + (isAncient ? 5 : 2)));
+      setEnergy(e => Math.min(maxEnergy, e + (isAncient ? 5 : 2)));
+      setXp(x => x + (isAncient ? XP_HARVEST_ANCIENT : XP_HARVEST));
+      // tally for companion unlocks
+      const harvestedKind = tile.kind;
+      setHarvestTally(prev => bumpTally(prev, harvestedKind, 1));
       setAnimatingTiles(a => ({ ...a, [tile.index]: "harvest" }));
       setConfettiTrigger(Date.now());
       setTimeout(() => setAnimatingTiles(a => { const { [tile.index]: _, ...r } = a; return r; }), 400);
@@ -467,7 +477,7 @@ function PlayPage() {
       // clear feed log for that tile
       setFeedLog(prev => { const { [tile.index]: _, ...r } = prev; return r; });
       setFact(randomFact());
-      toast.success(`+${gain} 💨 oxygen${isAncient ? " (Ancient!)" : ""}, +${isAncient ? 5 : 2} 💧`);
+      toast.success(`+${gain} 💨 oxygen${isAncient ? " (Ancient!)" : ""} • ${synergy > 1 ? `+${Math.round((synergy-1)*100)}% synergy` : ""}`);
       return;
     }
 
@@ -481,6 +491,7 @@ function PlayPage() {
       if (energy < PLANT_COST) { toast.error("Not enough energy 💧"); return; }
       const now = Date.now();
       setEnergy(e => e - PLANT_COST);
+      setXp(x => x + XP_PLANT);
       speciesPlantedRef.current.add(selectedKind);
       setAnimatingTiles(a => ({ ...a, [tile.index]: "pop" }));
       setTimeout(() => setAnimatingTiles(a => { const { [tile.index]: _, ...r } = a; return r; }), 350);
