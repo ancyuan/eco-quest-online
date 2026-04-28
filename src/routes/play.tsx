@@ -601,7 +601,31 @@ function PlayPage() {
 
         <div className="mb-4 h-2 w-full overflow-hidden rounded-full bg-secondary">
           <div className="h-full bg-accent transition-all duration-500"
-               style={{ width: `${(energy / ENERGY_MAX) * 100}%` }} />
+               style={{ width: `${(energy / maxEnergy) * 100}%` }} />
+        </div>
+
+        {/* Weather + Level bar */}
+        <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-border bg-card p-2 text-xs shadow-[var(--shadow-card)]">
+          <span className="rounded-md bg-secondary/60 px-2 py-1" title={WEATHERS[weather].description}>
+            {WEATHERS[weather].emoji} <span className="font-semibold">{WEATHERS[weather].label}</span>
+            <span className="ml-1 text-muted-foreground">
+              {Math.max(0, Math.ceil((weatherState.startedAt + weatherState.durationMs - Date.now()) / 1000))}s
+            </span>
+          </span>
+          <span className="rounded-md bg-secondary/60 px-2 py-1">
+            ⭐ Lv {levelInfo.level} <span className="text-muted-foreground">({levelInfo.into}/{levelInfo.need})</span>
+          </span>
+          <button onClick={() => setShowSkills(true)}
+            className={`ml-auto rounded-md border border-border px-2 py-1 font-semibold transition-colors ${
+              skillPoints > 0 ? "bg-primary text-primary-foreground animate-pulse" : "bg-card hover:bg-secondary"
+            }`}>
+            🌟 Skills{skillPoints > 0 ? ` (${skillPoints})` : ""}
+          </button>
+          <button onClick={() => setShowCompanions(true)}
+            className="rounded-md border border-border bg-card px-2 py-1 font-semibold hover:bg-secondary">
+            🐾 {activeCompanions.length > 0 ? activeCompanions.map(c => c).length : ""}
+            {activeCompanions.length === 0 ? "Companions" : `Active ${activeCompanions.length}`}
+          </button>
         </div>
 
         {/* Tree picker */}
