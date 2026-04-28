@@ -228,7 +228,13 @@ function PlayPage() {
       nextGrid: number,
       nextZones: Record<number, Biome>,
       nextFeed: FeedLog,
-      nextProg: ProgressionState
+      nextProg: ProgressionState,
+      nextXp: number,
+      nextSkillPoints: number,
+      nextSkills: SkillRanks,
+      nextUnlockedComps: CompanionId[],
+      nextActiveComps: CompanionId[],
+      nextTally: HarvestTally
     ) => {
       if (!user || !hydrated) return;
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
@@ -260,6 +266,13 @@ function PlayPage() {
             unlocked_grid_size: nextProg.unlocked_grid_size,
             unlocked_biomes: nextProg.unlocked_biomes,
             achievements: nextProg.achievements,
+            xp: nextXp,
+            level: computeLevel(nextXp).level,
+            skill_points: nextSkillPoints,
+            skills: nextSkills as unknown as never,
+            unlocked_companions: nextUnlockedComps,
+            active_companions: nextActiveComps,
+            harvest_tally: nextTally as unknown as never,
           }).eq("id", user.id),
         ]);
       }, 800);
