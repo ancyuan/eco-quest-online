@@ -20,6 +20,9 @@ interface Profile {
   display_name: string;
   oxygen: number;
   trees_saved: number;
+  xp?: number;
+  level?: number;
+  skill_points?: number;
 }
 
 function ProfilePage() {
@@ -43,7 +46,7 @@ function ProfilePage() {
     if (!user) return;
     supabase
       .from("profiles")
-      .select("display_name, oxygen, trees_saved")
+      .select("display_name, oxygen, trees_saved, xp, level, skill_points")
       .eq("id", user.id)
       .single()
       .then(({ data }) => {
@@ -114,6 +117,16 @@ function ProfilePage() {
               <div className="text-3xl">🌳</div>
               <div className="mt-1 text-2xl font-bold text-foreground">{profile?.trees_saved ?? 0}</div>
               <div className="text-xs text-muted-foreground">Trees saved</div>
+            </div>
+            <div className="rounded-xl bg-secondary/50 p-4 text-center">
+              <div className="text-3xl">⭐</div>
+              <div className="mt-1 text-2xl font-bold text-foreground">Lv {profile?.level ?? 1}</div>
+              <div className="text-xs text-muted-foreground">{profile?.xp ?? 0} XP</div>
+            </div>
+            <div className="rounded-xl bg-secondary/50 p-4 text-center">
+              <div className="text-3xl">🌟</div>
+              <div className="mt-1 text-2xl font-bold text-foreground">{profile?.skill_points ?? 0}</div>
+              <div className="text-xs text-muted-foreground">Skill points</div>
             </div>
           </div>
 

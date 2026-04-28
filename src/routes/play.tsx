@@ -12,11 +12,21 @@ import {
   defaultBiomeZones, biomeForTile, canPlantInBiome, harvestYield,
   evaluateUnlocks, canFeed, feedProgress, isReadyForAncient,
   type Tile, type TreeKind, type Biome, type FeedLog, type AchievementStats,
+  // Phase 3
+  computeStageEff, harvestYieldFull, synergyMultiplier,
+  effectiveMaxEnergy, effectiveFeedCost, effectiveThreatWindowMs,
+  computeLevel, XP_PLANT, XP_HARVEST, XP_HARVEST_ANCIENT, XP_DEFEND, XP_FEED,
+  SKILL_TREE, aggregateCompanionEffects, evaluateCompanionUnlocks, bumpTally,
+  WEATHERS,
+  type SkillRanks, type CompanionId, type HarvestTally,
 } from "@/lib/game";
 import { usePreferences, ensureNotificationPermission, notify } from "@/lib/preferences";
 import { Confetti } from "@/components/Confetti";
 import { Tutorial } from "@/components/Tutorial";
 import { Encyclopedia } from "@/components/Encyclopedia";
+import { SkillTree } from "@/components/SkillTree";
+import { CompanionPicker } from "@/components/CompanionPicker";
+import { useWeather } from "@/lib/weather";
 
 export const Route = createFileRoute("/play")({
   head: () => ({
@@ -40,6 +50,8 @@ function PlayPage() {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
   const { prefs, update: updatePrefs } = usePreferences();
+  const weatherState = useWeather();
+  const weather = weatherState.weather;
 
   const [gridSize, setGridSize] = useState(6);
   const [biomeZones, setBiomeZones] = useState<Record<number, Biome>>({});
@@ -70,6 +82,23 @@ function PlayPage() {
   const [showTutorial, setShowTutorial] = useState(false);
   const [showEncyclopedia, setShowEncyclopedia] = useState(false);
   const [feedingMode, setFeedingMode] = useState(false);
+  const [showSkills, setShowSkills] = useState(false);
+  const [showCompanions, setShowCompanions] = useState(false);
+
+  // Phase 3 player progression
+  const [xp, setXp] = useState(0);
+  const [skillPoints, setSkillPoints] = useState(0);
+  const [skills, setSkills] = useState<SkillRanks>({});
+  const [unlockedCompanions, setUnlockedCompanions] = useState<CompanionId[]>([]);
+  const [activeCompanions, setActiveCompanions] = useState<CompanionId[]>([]);
+  const [harvestTally, setHarvestTally] = useState<HarvestTally>({});
+  const lastAutoDefendRef = useRef<number>(Date.now());
+  const lastLevelRef = useRef<number>(1);
+
+  const levelInfo = useMemo(() => computeLevel(xp), [xp]);
+  const maxEnergy = useMemo(() => effectiveMaxEnergy(skills), [skills]);
+  const feedCost = useMemo(() => effectiveFeedCost(skills), [skills]);
+  const compEff = useMemo(() => aggregateCompanionEffects(activeCompanions), [activeCompanions]);
 
   // Tutorial gate
   useEffect(() => {
@@ -90,7 +119,7 @@ function PlayPage() {
           .select("energy, tiles, last_tick, grid_size, biome_zones, feed_log")
           .eq("user_id", user.id).maybeSingle(),
         supabase.from("profiles")
-          .select("oxygen, trees_saved, unlocked_trees, unlocked_grid_size, unlocked_biomes, achievements")
+          .select("oxygen, trees_saved, unlocked_trees, unlocked_grid_size, unlocked_biomes, achievements, xp, skill_points, skills, unlocked_companions, active_companions, harvest_tally")
           .eq("id", user.id).maybeSingle(),
       ]);
 
@@ -115,6 +144,15 @@ function PlayPage() {
         if (!prog.unlocked_trees.includes(selectedKind)) {
           setSelectedKind(prog.unlocked_trees[0] ?? "oak");
         }
+        // Phase 3 fields
+        const pAny = profile as Record<string, unknown>;
+        setXp(Number(pAny.xp ?? 0));
+        setSkillPoints(Number(pAny.skill_points ?? 0));
+        setSkills((pAny.skills as SkillRanks) ?? {});
+        setUnlockedCompanions(((pAny.unlocked_companions as string[]) ?? []) as CompanionId[]);
+        setActiveCompanions(((pAny.active_companions as string[]) ?? []) as CompanionId[]);
+        setHarvestTally((pAny.harvest_tally as HarvestTally) ?? {});
+        lastLevelRef.current = computeLevel(Number(pAny.xp ?? 0)).level;
       }
 
       const activeGrid = forest?.grid_size ?? prog.unlocked_grid_size ?? 6;
@@ -190,7 +228,13 @@ function PlayPage() {
       nextGrid: number,
       nextZones: Record<number, Biome>,
       nextFeed: FeedLog,
-      nextProg: ProgressionState
+      nextProg: ProgressionState,
+      nextXp: number,
+      nextSkillPoints: number,
+      nextSkills: SkillRanks,
+      nextUnlockedComps: CompanionId[],
+      nextActiveComps: CompanionId[],
+      nextTally: HarvestTally
     ) => {
       if (!user || !hydrated) return;
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
@@ -222,6 +266,13 @@ function PlayPage() {
             unlocked_grid_size: nextProg.unlocked_grid_size,
             unlocked_biomes: nextProg.unlocked_biomes,
             achievements: nextProg.achievements,
+            xp: nextXp,
+            level: computeLevel(nextXp).level,
+            skill_points: nextSkillPoints,
+            skills: nextSkills as unknown as never,
+            unlocked_companions: nextUnlockedComps,
+            active_companions: nextActiveComps,
+            harvest_tally: nextTally as unknown as never,
           }).eq("id", user.id),
         ]);
       }, 800);
@@ -276,16 +327,19 @@ function PlayPage() {
     if (!hydrated) return;
     const interval = setInterval(() => {
       const now = Date.now();
+      const threatWindow = effectiveThreatWindowMs(skills);
+      const threatProb = THREAT_SPAWN_PROB * WEATHERS[weather].threatProbMul * compEff.threatProbMul;
       setTiles((prev) => {
         const next = prev.map((t) => {
           if (!t.kind || !t.plantedAt) return t;
           if (t.threat && t.threatExpiresAt && t.threatExpiresAt <= now) return { index: t.index };
           const isAncient = t.stage === "ancient";
-          const stage = computeStage(t.plantedAt, now, t.kind, isAncient);
+          const biome = biomeForTile(biomeZones, t.index);
+          const stage = computeStageEff(t.plantedAt, now, t.kind, biome, weather, skills, activeCompanions, isAncient);
           let updated: Tile = { ...t, stage };
-          if ((stage === "mature" || stage === "ancient") && !t.threat && Math.random() < THREAT_SPAWN_PROB) {
+          if ((stage === "mature" || stage === "ancient") && !t.threat && Math.random() < threatProb) {
             const newThreat = randomThreat();
-            updated = { ...updated, threat: newThreat, threatExpiresAt: now + THREAT_WINDOW_MS };
+            updated = { ...updated, threat: newThreat, threatExpiresAt: now + threatWindow };
             if (prefs.notifications_enabled && (now - (lastNotifiedRef.current[t.index] ?? 0)) > 30_000) {
               lastNotifiedRef.current[t.index] = now;
               notify("🌳 Forest Guardian", `${THREATS[newThreat].emoji} ${THREATS[newThreat].label} attacking your tree!`);
@@ -298,7 +352,24 @@ function PlayPage() {
 
       if (now - lastEnergyTickRef.current >= ENERGY_REGEN_MS) {
         lastEnergyTickRef.current = now;
-        setEnergy((e) => Math.min(ENERGY_MAX, e + 1));
+        setEnergy((e) => Math.min(maxEnergy, e + 1 + compEff.energyTickBonus));
+      }
+
+      // Companion auto-defend (Pine Fox + Protector skill stacks)
+      const autoDefendInterval = compEff.autoDefendPerMs > 0 ? 1 / compEff.autoDefendPerMs : 0;
+      const protectorAuto = (skills["auto_defend"] ?? 0) > 0 ? 60_000 / (skills["auto_defend"] ?? 1) : 0;
+      const interval2 = autoDefendInterval && protectorAuto ? Math.min(autoDefendInterval, protectorAuto)
+                       : autoDefendInterval || protectorAuto;
+      if (interval2 > 0 && now - lastAutoDefendRef.current >= interval2) {
+        setTiles(prev => {
+          const idx = prev.findIndex(t => t.threat);
+          if (idx === -1) return prev;
+          lastAutoDefendRef.current = now;
+          setTreesSaved(s => s + 1);
+          setXp(x => x + XP_DEFEND);
+          toast.success("🛡️ Auto-defend triggered");
+          return prev.map((t, i) => i === idx ? { ...t, threat: undefined, threatExpiresAt: undefined } : t);
+        });
       }
 
       if (prefs.auto_harvest && now - lastAutoHarvestRef.current >= AUTO_HARVEST_MS) {
@@ -309,7 +380,12 @@ function PlayPage() {
           const next = prev.map((t) => {
             if (t.kind && (t.stage === "mature" || t.stage === "ancient") && !t.threat) {
               const biome = biomeForTile(biomeZones, t.index);
-              oxygenGained += Math.floor(harvestYield(t.kind, biome, t.stage === "ancient") / 2);
+              const synergy = synergyMultiplier(prev, gridSize, t.index, t.kind);
+              const yld = harvestYieldFull({
+                kind: t.kind, biome, isAncient: t.stage === "ancient",
+                weather, skills, companions: activeCompanions, synergyMul: synergy,
+              });
+              oxygenGained += Math.floor(yld / 2);
               energyGained += 1;
               return { index: t.index };
             }
@@ -317,19 +393,21 @@ function PlayPage() {
           });
           if (oxygenGained > 0) {
             setOxygen((o) => o + oxygenGained);
-            setEnergy((e) => Math.min(ENERGY_MAX, e + energyGained));
+            setEnergy((e) => Math.min(maxEnergy, e + energyGained));
           }
           return next;
         });
       }
     }, TICK_MS);
     return () => clearInterval(interval);
-  }, [hydrated, prefs.auto_harvest, prefs.notifications_enabled, biomeZones]);
+  }, [hydrated, prefs.auto_harvest, prefs.notifications_enabled, biomeZones, weather, skills, activeCompanions, gridSize, maxEnergy, compEff]);
 
   // Persist on changes
   useEffect(() => {
-    persist(tiles, energy, oxygen, treesSaved, gridSize, biomeZones, feedLog, progression);
-  }, [tiles, energy, oxygen, treesSaved, gridSize, biomeZones, feedLog, progression, persist]);
+    persist(tiles, energy, oxygen, treesSaved, gridSize, biomeZones, feedLog, progression,
+            xp, skillPoints, skills, unlockedCompanions, activeCompanions, harvestTally);
+  }, [tiles, energy, oxygen, treesSaved, gridSize, biomeZones, feedLog, progression,
+      xp, skillPoints, skills, unlockedCompanions, activeCompanions, harvestTally, persist]);
 
   // Actions
   const handleTileClick = (tile: Tile) => {
@@ -339,13 +417,14 @@ function PlayPage() {
         toast.error("Feed only works on mature trees");
         return;
       }
-      if (energy < FEED_COST) { toast.error(`Need ${FEED_COST} 💧 to feed`); return; }
+      if (energy < feedCost) { toast.error(`Need ${feedCost} 💧 to feed`); return; }
       if (!canFeed(feedLog, tile.index, Date.now())) {
         toast.error("This tree was fed recently. Wait a bit.");
         return;
       }
       const now = Date.now();
-      setEnergy(e => e - FEED_COST);
+      setEnergy(e => e - feedCost);
+      setXp(x => x + XP_FEED);
       setFeedLog(prev => {
         const next = { ...prev, [tile.index]: [...(prev[tile.index] ?? []), now] };
         // promote to ancient if ritual complete
@@ -371,6 +450,7 @@ function PlayPage() {
         t.index === tile.index ? { ...t, threat: undefined, threatExpiresAt: undefined } : t
       ));
       setTreesSaved(s => s + 1);
+      setXp(x => x + XP_DEFEND);
       toast.success(`Saved your tree from ${THREATS[tile.threat].label.toLowerCase()}!`);
       return;
     }
@@ -379,9 +459,17 @@ function PlayPage() {
     if (tile.kind && (tile.stage === "mature" || tile.stage === "ancient")) {
       const biome = biomeForTile(biomeZones, tile.index);
       const isAncient = tile.stage === "ancient";
-      const gain = harvestYield(tile.kind, biome, isAncient);
+      const synergy = synergyMultiplier(tiles, gridSize, tile.index, tile.kind);
+      const gain = harvestYieldFull({
+        kind: tile.kind, biome, isAncient,
+        weather, skills, companions: activeCompanions, synergyMul: synergy,
+      });
       setOxygen(o => o + gain);
-      setEnergy(e => Math.min(ENERGY_MAX, e + (isAncient ? 5 : 2)));
+      setEnergy(e => Math.min(maxEnergy, e + (isAncient ? 5 : 2)));
+      setXp(x => x + (isAncient ? XP_HARVEST_ANCIENT : XP_HARVEST));
+      // tally for companion unlocks
+      const harvestedKind = tile.kind;
+      setHarvestTally(prev => bumpTally(prev, harvestedKind, 1));
       setAnimatingTiles(a => ({ ...a, [tile.index]: "harvest" }));
       setConfettiTrigger(Date.now());
       setTimeout(() => setAnimatingTiles(a => { const { [tile.index]: _, ...r } = a; return r; }), 400);
@@ -389,7 +477,7 @@ function PlayPage() {
       // clear feed log for that tile
       setFeedLog(prev => { const { [tile.index]: _, ...r } = prev; return r; });
       setFact(randomFact());
-      toast.success(`+${gain} 💨 oxygen${isAncient ? " (Ancient!)" : ""}, +${isAncient ? 5 : 2} 💧`);
+      toast.success(`+${gain} 💨 oxygen${isAncient ? " (Ancient!)" : ""} • ${synergy > 1 ? `+${Math.round((synergy-1)*100)}% synergy` : ""}`);
       return;
     }
 
@@ -403,6 +491,7 @@ function PlayPage() {
       if (energy < PLANT_COST) { toast.error("Not enough energy 💧"); return; }
       const now = Date.now();
       setEnergy(e => e - PLANT_COST);
+      setXp(x => x + XP_PLANT);
       speciesPlantedRef.current.add(selectedKind);
       setAnimatingTiles(a => ({ ...a, [tile.index]: "pop" }));
       setTimeout(() => setAnimatingTiles(a => { const { [tile.index]: _, ...r } = a; return r; }), 350);
@@ -427,6 +516,7 @@ function PlayPage() {
       ? selectedKind
       : (progression.unlocked_trees.find(k => canPlantInBiome(k, biome)) ?? selectedKind);
     setEnergy(e => e - PLANT_COST);
+    setXp(x => x + XP_PLANT);
     speciesPlantedRef.current.add(kind);
     const now = Date.now();
     setTiles(prev => prev.map(t =>
@@ -461,6 +551,38 @@ function PlayPage() {
     [progression.unlocked_trees]
   );
 
+  // Level-up: award skill points
+  useEffect(() => {
+    if (!hydrated) return;
+    const lvl = levelInfo.level;
+    if (lvl > lastLevelRef.current) {
+      const gained = lvl - lastLevelRef.current;
+      lastLevelRef.current = lvl;
+      setSkillPoints(p => p + gained);
+      toast.success(`🎉 Level ${lvl}!`, { description: `+${gained} skill point` });
+    }
+  }, [levelInfo.level, hydrated]);
+
+  // Companion unlocks based on tally
+  useEffect(() => {
+    if (!hydrated) return;
+    const fresh = evaluateCompanionUnlocks(harvestTally, unlockedCompanions);
+    if (fresh.length === 0) return;
+    setUnlockedCompanions(prev => [...prev, ...fresh]);
+    fresh.forEach(id => toast.success(`🐾 Companion befriended!`, { description: id }));
+  }, [harvestTally, unlockedCompanions, hydrated]);
+
+  const handleSpendSkill = (id: string) => {
+    if (skillPoints < 1) return;
+    const node = SKILL_TREE.find(n => n.id === id);
+    if (!node) return;
+    const cur = skills[id] ?? 0;
+    if (cur >= node.maxRank) return;
+    setSkillPoints(p => p - 1);
+    setSkills(prev => ({ ...prev, [id]: cur + 1 }));
+    toast.success(`${node.emoji} ${node.label} → rank ${cur + 1}`);
+  };
+
   if (loading || !user) {
     return <div className="p-10 text-center text-muted-foreground">Loading your forest…</div>;
   }
@@ -472,14 +594,38 @@ function PlayPage() {
       <div className="mx-auto max-w-3xl">
         {/* HUD */}
         <div className="mb-4 grid grid-cols-3 gap-2">
-          <Stat icon="💧" label="Energy" value={`${energy}/${ENERGY_MAX}`} tooltip="Spend on planting & feeding. +1 every 15s." />
+          <Stat icon="💧" label="Energy" value={`${energy}/${maxEnergy}`} tooltip="Spend on planting & feeding. +1 every 15s." />
           <Stat icon="💨" label="Oxygen" value={oxygen} tooltip="Lifetime score from harvests." />
           <Stat icon="🌳" label="Saved" value={treesSaved} tooltip="Trees defended from threats." />
         </div>
 
         <div className="mb-4 h-2 w-full overflow-hidden rounded-full bg-secondary">
           <div className="h-full bg-accent transition-all duration-500"
-               style={{ width: `${(energy / ENERGY_MAX) * 100}%` }} />
+               style={{ width: `${(energy / maxEnergy) * 100}%` }} />
+        </div>
+
+        {/* Weather + Level bar */}
+        <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-border bg-card p-2 text-xs shadow-[var(--shadow-card)]">
+          <span className="rounded-md bg-secondary/60 px-2 py-1" title={WEATHERS[weather].description}>
+            {WEATHERS[weather].emoji} <span className="font-semibold">{WEATHERS[weather].label}</span>
+            <span className="ml-1 text-muted-foreground">
+              {Math.max(0, Math.ceil((weatherState.startedAt + weatherState.durationMs - Date.now()) / 1000))}s
+            </span>
+          </span>
+          <span className="rounded-md bg-secondary/60 px-2 py-1">
+            ⭐ Lv {levelInfo.level} <span className="text-muted-foreground">({levelInfo.into}/{levelInfo.need})</span>
+          </span>
+          <button onClick={() => setShowSkills(true)}
+            className={`ml-auto rounded-md border border-border px-2 py-1 font-semibold transition-colors ${
+              skillPoints > 0 ? "bg-primary text-primary-foreground animate-pulse" : "bg-card hover:bg-secondary"
+            }`}>
+            🌟 Skills{skillPoints > 0 ? ` (${skillPoints})` : ""}
+          </button>
+          <button onClick={() => setShowCompanions(true)}
+            className="rounded-md border border-border bg-card px-2 py-1 font-semibold hover:bg-secondary">
+            🐾 {activeCompanions.length > 0 ? activeCompanions.map(c => c).length : ""}
+            {activeCompanions.length === 0 ? "Companions" : `Active ${activeCompanions.length}`}
+          </button>
         </div>
 
         {/* Tree picker */}
@@ -623,6 +769,25 @@ function PlayPage() {
       )}
 
       <Encyclopedia open={showEncyclopedia} onOpenChange={setShowEncyclopedia} unlockedTrees={progression.unlocked_trees} />
+
+      <SkillTree
+        open={showSkills}
+        onOpenChange={setShowSkills}
+        skills={skills}
+        skillPoints={skillPoints}
+        level={levelInfo.level}
+        xpInto={levelInfo.into}
+        xpNeed={levelInfo.need}
+        onSpend={handleSpendSkill}
+      />
+      <CompanionPicker
+        open={showCompanions}
+        onOpenChange={setShowCompanions}
+        unlocked={unlockedCompanions}
+        active={activeCompanions}
+        tally={harvestTally}
+        onChange={setActiveCompanions}
+      />
     </main>
   );
 }
