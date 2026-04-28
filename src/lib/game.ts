@@ -286,3 +286,252 @@ export function feedProgress(log: FeedLog, tileIndex: number): number {
 export function isReadyForAncient(log: FeedLog, tileIndex: number): boolean {
   return (log[tileIndex] ?? []).length >= ANCIENT_FEEDS_REQUIRED;
 }
+
+// ============================================================
+// PHASE 3: Weather, Synergy, Skill Tree, Companions
+// ============================================================
+
+// ---------- Weather ----------
+export type Weather = "sunny" | "rain" | "fog" | "storm";
+
+export interface WeatherDef {
+  label: string;
+  emoji: string;
+  description: string;
+  // multipliers
+  growthMul: (biome: Biome) => number;
+  harvestMul: number;
+  threatProbMul: number;
+}
+
+export const WEATHERS: Record<Weather, WeatherDef> = {
+  sunny: {
+    label: "Sunny", emoji: "☀️",
+    description: "+10% O₂ on harvest. A perfect day for the forest.",
+    growthMul: () => 1, harvestMul: 1.10, threatProbMul: 1,
+  },
+  rain: {
+    label: "Rain", emoji: "🌧️",
+    description: "Rainforest grows +20% faster. Threats slightly less frequent.",
+    growthMul: (b) => (b === "rainforest" ? 1.2 : 1.0),
+    harvestMul: 1, threatProbMul: 0.7,
+  },
+  fog: {
+    label: "Fog", emoji: "🌫️",
+    description: "Mysterious calm. Ancient feed cooldown halved.",
+    growthMul: () => 1, harvestMul: 1, threatProbMul: 0.5,
+  },
+  storm: {
+    label: "Storm", emoji: "🌪️",
+    description: "Loggers are bolder. +60% threat chance.",
+    growthMul: () => 0.9, harvestMul: 1, threatProbMul: 1.6,
+  },
+};
+
+export const WEATHER_CYCLE_MS = 5 * 60_000;
+
+export interface WeatherState {
+  weather: Weather;
+  startedAt: number;
+  durationMs: number;
+}
+
+export function pickWeather(seed: number): Weather {
+  const order: Weather[] = ["sunny", "rain", "fog", "storm"];
+  return order[Math.abs(seed) % order.length];
+}
+
+export function weatherRemainingMs(w: WeatherState, now: number): number {
+  return Math.max(0, w.startedAt + w.durationMs - now);
+}
+
+// ---------- Skill Tree ----------
+export type SkillPath = "cultivator" | "protector" | "naturalist";
+
+export interface SkillNode {
+  id: string;
+  path: SkillPath;
+  label: string;
+  emoji: string;
+  description: string;
+  maxRank: number;
+}
+
+export const SKILL_TREE: SkillNode[] = [
+  // Cultivator
+  { id: "growth_speed", path: "cultivator", label: "Green Thumb",      emoji: "🌱", description: "+5% growth speed per rank", maxRank: 5 },
+  { id: "oxygen_yield", path: "cultivator", label: "Photosynthesis",   emoji: "☀️", description: "+5% O₂ harvest per rank",   maxRank: 5 },
+  // Protector
+  { id: "threat_window",path: "protector",  label: "Watchful Eye",     emoji: "👁️", description: "+15% threat defend window per rank", maxRank: 5 },
+  { id: "auto_defend",  path: "protector",  label: "Forest Wardens",   emoji: "🛡️", description: "1 auto-defend per minute per rank",  maxRank: 3 },
+  // Naturalist
+  { id: "max_energy",   path: "naturalist", label: "Endurance",        emoji: "💧", description: "+2 max energy per rank",     maxRank: 5 },
+  { id: "feed_cost",    path: "naturalist", label: "Efficient Ritual", emoji: "🍯", description: "-1 feed cost per rank (min 1)", maxRank: 4 },
+];
+
+export type SkillRanks = Partial<Record<string, number>>;
+
+export function xpForLevel(level: number): number {
+  // 100, 250, 450, 700, 1000, ...
+  return 100 + (level - 1) * 150 + Math.max(0, (level - 1) * (level - 1) * 25);
+}
+
+export function computeLevel(xp: number): { level: number; into: number; need: number } {
+  let lvl = 1;
+  let remaining = xp;
+  while (remaining >= xpForLevel(lvl)) {
+    remaining -= xpForLevel(lvl);
+    lvl++;
+  }
+  return { level: lvl, into: remaining, need: xpForLevel(lvl) };
+}
+
+export const XP_PLANT = 2;
+export const XP_HARVEST = 5;
+export const XP_HARVEST_ANCIENT = 25;
+export const XP_DEFEND = 4;
+export const XP_FEED = 3;
+
+export function skillRank(skills: SkillRanks, id: string): number {
+  return skills[id] ?? 0;
+}
+
+export function effectiveMaxEnergy(skills: SkillRanks): number {
+  return ENERGY_MAX + 2 * skillRank(skills, "max_energy");
+}
+
+export function effectiveFeedCost(skills: SkillRanks): number {
+  return Math.max(1, FEED_COST - skillRank(skills, "feed_cost"));
+}
+
+export function effectiveThreatWindowMs(skills: SkillRanks): number {
+  return Math.round(THREAT_WINDOW_MS * (1 + 0.15 * skillRank(skills, "threat_window")));
+}
+
+// ---------- Synergy (adjacency) ----------
+// Returns multiplier on harvest yield based on neighbors.
+// +5% per same-species neighbor (max 4 = +20%), +3% per different-species neighbor (max 4 = +12%, growth-flavored small O₂ tip).
+export function synergyMultiplier(tiles: Tile[], gridSize: number, index: number, kind: TreeKind): number {
+  const r = Math.floor(index / gridSize);
+  const c = index % gridSize;
+  const dirs = [[-1,0],[1,0],[0,-1],[0,1]];
+  let same = 0, diff = 0;
+  for (const [dr, dc] of dirs) {
+    const nr = r + dr, nc = c + dc;
+    if (nr < 0 || nc < 0 || nr >= gridSize || nc >= gridSize) continue;
+    const n = tiles[nr * gridSize + nc];
+    if (!n || !n.kind) continue;
+    if (n.kind === kind) same++;
+    else diff++;
+  }
+  return 1 + same * 0.05 + diff * 0.03;
+}
+
+// ---------- Companions ----------
+export type CompanionId = "butterfly" | "owl" | "panda" | "deer" | "fox" | "frog";
+
+export interface CompanionDef {
+  id: CompanionId;
+  label: string;
+  emoji: string;
+  description: string;
+  unlockSpecies: TreeKind;   // harvest 50 of this species
+  unlockCount: number;
+}
+
+export const COMPANIONS: CompanionDef[] = [
+  { id: "butterfly", label: "Sakura Butterfly", emoji: "🦋", description: "+10% harvest O₂",        unlockSpecies: "sakura",     unlockCount: 50 },
+  { id: "owl",       label: "Oak Owl",          emoji: "🦉", description: "+1 energy regen tick",   unlockSpecies: "oak",        unlockCount: 50 },
+  { id: "panda",     label: "Bamboo Panda",     emoji: "🐼", description: "−25% threat spawn rate", unlockSpecies: "bamboo",     unlockCount: 50 },
+  { id: "deer",      label: "Maple Deer",       emoji: "🦌", description: "+5% growth speed",       unlockSpecies: "maple",      unlockCount: 50 },
+  { id: "fox",       label: "Pine Fox",         emoji: "🦊", description: "1 auto-defend / 5min",   unlockSpecies: "pine",       unlockCount: 50 },
+  { id: "frog",      label: "Mangrove Frog",    emoji: "🐸", description: "+10% O₂ in Rainforest",  unlockSpecies: "mangrove",   unlockCount: 50 },
+];
+
+export const MAX_ACTIVE_COMPANIONS = 3;
+
+export interface CompanionEffects {
+  harvestMul: number;
+  growthMul: number;
+  threatProbMul: number;
+  rainforestBonus: number; // additive multiplier on rainforest harvests
+  energyTickBonus: number; // extra +1 per regen tick per stack
+  autoDefendPerMs: number; // 1 / interval
+}
+
+export function aggregateCompanionEffects(active: CompanionId[]): CompanionEffects {
+  const eff: CompanionEffects = {
+    harvestMul: 1, growthMul: 1, threatProbMul: 1,
+    rainforestBonus: 0, energyTickBonus: 0, autoDefendPerMs: 0,
+  };
+  for (const id of active) {
+    switch (id) {
+      case "butterfly": eff.harvestMul *= 1.10; break;
+      case "owl":       eff.energyTickBonus += 1; break;
+      case "panda":     eff.threatProbMul *= 0.75; break;
+      case "deer":      eff.growthMul *= 1.05; break;
+      case "fox":       eff.autoDefendPerMs += 1 / (5 * 60_000); break;
+      case "frog":      eff.rainforestBonus += 0.10; break;
+    }
+  }
+  return eff;
+}
+
+// Combined harvest yield with biome + weather + companions + synergy + skills.
+export function harvestYieldFull(params: {
+  kind: TreeKind;
+  biome: Biome;
+  isAncient: boolean;
+  weather: Weather;
+  skills: SkillRanks;
+  companions: CompanionId[];
+  synergyMul: number;
+}): number {
+  const { kind, biome, isAncient, weather, skills, companions, synergyMul } = params;
+  const base = isAncient ? TREES[kind].ancientOxygen : TREES[kind].oxygen;
+  const biomeMul = 1 + BIOMES[biome].oxygenBonusPct / 100;
+  const weatherMul = WEATHERS[weather].harvestMul;
+  const skillMul = 1 + 0.05 * skillRank(skills, "oxygen_yield");
+  const compEff = aggregateCompanionEffects(companions);
+  const compMul = compEff.harvestMul * (biome === "rainforest" ? 1 + compEff.rainforestBonus : 1);
+  return Math.round(base * biomeMul * weatherMul * skillMul * compMul * synergyMul);
+}
+
+// Effective growthMs given weather, skills, companions
+export function effectiveGrowthMs(kind: TreeKind, biome: Biome, weather: Weather, skills: SkillRanks, companions: CompanionId[]): number {
+  const base = TREES[kind].growthMs;
+  const wMul = WEATHERS[weather].growthMul(biome);
+  const sMul = 1 + 0.05 * skillRank(skills, "growth_speed");
+  const cMul = aggregateCompanionEffects(companions).growthMul;
+  return Math.round(base / (wMul * sMul * cMul));
+}
+
+// Stage with effective growth
+export function computeStageEff(plantedAt: number, now: number, kind: TreeKind, biome: Biome, weather: Weather, skills: SkillRanks, companions: CompanionId[], isAncient = false): GrowthStage {
+  if (isAncient) return "ancient";
+  const ms = effectiveGrowthMs(kind, biome, weather, skills, companions);
+  const age = now - plantedAt;
+  if (age >= ms * 2) return "mature";
+  if (age >= ms) return "sapling";
+  return "seed";
+}
+
+// Tally helpers (track per-species harvest count for companion unlock)
+export type HarvestTally = Partial<Record<TreeKind, number>>;
+
+export function bumpTally(tally: HarvestTally, kind: TreeKind, by = 1): HarvestTally {
+  return { ...tally, [kind]: (tally[kind] ?? 0) + by };
+}
+
+export function evaluateCompanionUnlocks(tally: HarvestTally, currentUnlocked: CompanionId[]): CompanionId[] {
+  const out: CompanionId[] = [];
+  for (const c of COMPANIONS) {
+    if (currentUnlocked.includes(c.id)) continue;
+    if ((tally[c.unlockSpecies] ?? 0) >= c.unlockCount) out.push(c.id);
+  }
+  return out;
+}
+
+export function totalSkillPointsSpent(skills: SkillRanks): number {
+  return Object.values(skills).reduce<number>((a, b) => a + (b ?? 0), 0);
+}
