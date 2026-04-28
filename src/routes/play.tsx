@@ -119,7 +119,7 @@ function PlayPage() {
           .select("energy, tiles, last_tick, grid_size, biome_zones, feed_log")
           .eq("user_id", user.id).maybeSingle(),
         supabase.from("profiles")
-          .select("oxygen, trees_saved, unlocked_trees, unlocked_grid_size, unlocked_biomes, achievements")
+          .select("oxygen, trees_saved, unlocked_trees, unlocked_grid_size, unlocked_biomes, achievements, xp, skill_points, skills, unlocked_companions, active_companions, harvest_tally")
           .eq("id", user.id).maybeSingle(),
       ]);
 
@@ -144,6 +144,15 @@ function PlayPage() {
         if (!prog.unlocked_trees.includes(selectedKind)) {
           setSelectedKind(prog.unlocked_trees[0] ?? "oak");
         }
+        // Phase 3 fields
+        const pAny = profile as Record<string, unknown>;
+        setXp(Number(pAny.xp ?? 0));
+        setSkillPoints(Number(pAny.skill_points ?? 0));
+        setSkills((pAny.skills as SkillRanks) ?? {});
+        setUnlockedCompanions(((pAny.unlocked_companions as string[]) ?? []) as CompanionId[]);
+        setActiveCompanions(((pAny.active_companions as string[]) ?? []) as CompanionId[]);
+        setHarvestTally((pAny.harvest_tally as HarvestTally) ?? {});
+        lastLevelRef.current = computeLevel(Number(pAny.xp ?? 0)).level;
       }
 
       const activeGrid = forest?.grid_size ?? prog.unlocked_grid_size ?? 6;
