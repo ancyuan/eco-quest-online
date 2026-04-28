@@ -594,7 +594,7 @@ function PlayPage() {
       <div className="mx-auto max-w-3xl">
         {/* HUD */}
         <div className="mb-4 grid grid-cols-3 gap-2">
-          <Stat icon="💧" label="Energy" value={`${energy}/${ENERGY_MAX}`} tooltip="Spend on planting & feeding. +1 every 15s." />
+          <Stat icon="💧" label="Energy" value={`${energy}/${maxEnergy}`} tooltip="Spend on planting & feeding. +1 every 15s." />
           <Stat icon="💨" label="Oxygen" value={oxygen} tooltip="Lifetime score from harvests." />
           <Stat icon="🌳" label="Saved" value={treesSaved} tooltip="Trees defended from threats." />
         </div>
