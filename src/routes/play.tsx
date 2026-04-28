@@ -27,6 +27,12 @@ import { Encyclopedia } from "@/components/Encyclopedia";
 import { SkillTree } from "@/components/SkillTree";
 import { CompanionPicker } from "@/components/CompanionPicker";
 import { useWeather } from "@/lib/weather";
+import { DailyQuests } from "@/components/DailyQuests";
+import { StreakBonus } from "@/components/StreakBonus";
+import {
+  applyEvent, claimQuest, claimStreak, fromWire, toWire, canClaimToday,
+  type DailyQuestState, type DailyQuestStateWire, type QuestEvent, type StreakState,
+} from "@/lib/quests";
 
 export const Route = createFileRoute("/play")({
   head: () => ({
@@ -95,6 +101,13 @@ function PlayPage() {
   const lastAutoDefendRef = useRef<number>(Date.now());
   const lastLevelRef = useRef<number>(1);
 
+  // Phase 4: quests + streak + acorns
+  const [acorns, setAcorns] = useState(0);
+  const [questState, setQuestState] = useState<DailyQuestState | null>(null);
+  const [streak, setStreak] = useState<StreakState>({ current: 0, best: 0, lastClaim: null });
+  const [showQuests, setShowQuests] = useState(false);
+  const [showStreak, setShowStreak] = useState(false);
+
   const levelInfo = useMemo(() => computeLevel(xp), [xp]);
   const maxEnergy = useMemo(() => effectiveMaxEnergy(skills), [skills]);
   const feedCost = useMemo(() => effectiveFeedCost(skills), [skills]);
@@ -119,7 +132,7 @@ function PlayPage() {
           .select("energy, tiles, last_tick, grid_size, biome_zones, feed_log")
           .eq("user_id", user.id).maybeSingle(),
         supabase.from("profiles")
-          .select("oxygen, trees_saved, unlocked_trees, unlocked_grid_size, unlocked_biomes, achievements, xp, skill_points, skills, unlocked_companions, active_companions, harvest_tally")
+          .select("oxygen, trees_saved, unlocked_trees, unlocked_grid_size, unlocked_biomes, achievements, xp, skill_points, skills, unlocked_companions, active_companions, harvest_tally, acorns, daily_quests, streak_current, streak_best, streak_last_claim")
           .eq("id", user.id).maybeSingle(),
       ]);
 
@@ -153,6 +166,21 @@ function PlayPage() {
         setActiveCompanions(((pAny.active_companions as string[]) ?? []) as CompanionId[]);
         setHarvestTally((pAny.harvest_tally as HarvestTally) ?? {});
         lastLevelRef.current = computeLevel(Number(pAny.xp ?? 0)).level;
+
+        // Phase 4 fields
+        setAcorns(Number(pAny.acorns ?? 0));
+        const qs = fromWire((pAny.daily_quests as DailyQuestStateWire) ?? null, user.id);
+        setQuestState(qs);
+        const nextStreak: StreakState = {
+          current: Number(pAny.streak_current ?? 0),
+          best: Number(pAny.streak_best ?? 0),
+          lastClaim: (pAny.streak_last_claim as string | null) ?? null,
+        };
+        setStreak(nextStreak);
+        if (canClaimToday(nextStreak)) {
+          // auto-open streak modal once on first daily login
+          setTimeout(() => setShowStreak(true), 600);
+        }
       }
 
       const activeGrid = forest?.grid_size ?? prog.unlocked_grid_size ?? 6;
@@ -234,7 +262,10 @@ function PlayPage() {
       nextSkills: SkillRanks,
       nextUnlockedComps: CompanionId[],
       nextActiveComps: CompanionId[],
-      nextTally: HarvestTally
+      nextTally: HarvestTally,
+      nextAcorns: number,
+      nextQuests: DailyQuestState | null,
+      nextStreak: StreakState
     ) => {
       if (!user || !hydrated) return;
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
@@ -273,6 +304,11 @@ function PlayPage() {
             unlocked_companions: nextUnlockedComps,
             active_companions: nextActiveComps,
             harvest_tally: nextTally as unknown as never,
+            acorns: nextAcorns,
+            daily_quests: (nextQuests ? toWire(nextQuests) : {}) as unknown as never,
+            streak_current: nextStreak.current,
+            streak_best: nextStreak.best,
+            streak_last_claim: nextStreak.lastClaim,
           }).eq("id", user.id),
         ]);
       }, 800);
@@ -405,9 +441,52 @@ function PlayPage() {
   // Persist on changes
   useEffect(() => {
     persist(tiles, energy, oxygen, treesSaved, gridSize, biomeZones, feedLog, progression,
-            xp, skillPoints, skills, unlockedCompanions, activeCompanions, harvestTally);
+            xp, skillPoints, skills, unlockedCompanions, activeCompanions, harvestTally,
+            acorns, questState, streak);
   }, [tiles, energy, oxygen, treesSaved, gridSize, biomeZones, feedLog, progression,
-      xp, skillPoints, skills, unlockedCompanions, activeCompanions, harvestTally, persist]);
+      xp, skillPoints, skills, unlockedCompanions, activeCompanions, harvestTally,
+      acorns, questState, streak, persist]);
+
+  // Quest event helper
+  const emitQuestEvent = useCallback((ev: QuestEvent) => {
+    setQuestState(prev => {
+      if (!prev) return prev;
+      const { state, completed } = applyEvent(prev, ev);
+      completed.forEach(d =>
+        toast.success(`📜 Quest ready: ${d.label}`, { description: "Open Quests to claim your reward." })
+      );
+      return state;
+    });
+  }, []);
+
+  const handleClaimQuest = useCallback((id: string) => {
+    setQuestState(prev => {
+      if (!prev) return prev;
+      const { state, def } = claimQuest(prev, id);
+      if (def) {
+        setXp(x => x + def.reward.xp);
+        setAcorns(a => a + def.reward.acorns);
+        toast.success(`✅ ${def.label}`, { description: `+${def.reward.xp} XP · +${def.reward.acorns} 🌰` });
+      }
+      return state;
+    });
+  }, []);
+
+  const handleClaimStreak = useCallback(() => {
+    setStreak(prev => {
+      if (!canClaimToday(prev)) return prev;
+      const { state, reward, isNewRecord } = claimStreak(prev);
+      if (reward.energy) setEnergy(e => Math.min(maxEnergy, e + (reward.energy ?? 0)));
+      if (reward.acorns) setAcorns(a => a + (reward.acorns ?? 0));
+      if (reward.xp)     setXp(x => x + (reward.xp ?? 0));
+      setConfettiTrigger(Date.now());
+      toast.success(`🔥 Day ${state.current} streak!`, {
+        description: `${reward.emoji} ${reward.label}${isNewRecord ? " · new record!" : ""}`,
+      });
+      return state;
+    });
+    setShowStreak(false);
+  }, [maxEnergy]);
 
   // Actions
   const handleTileClick = (tile: Tile) => {
