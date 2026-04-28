@@ -86,51 +86,96 @@ export type Database = {
       profiles: {
         Row: {
           achievements: string[]
+          active_companions: string[]
           auto_harvest: boolean
           created_at: string
           dark_mode: boolean
           display_name: string
+          harvest_tally: Json
           id: string
+          level: number
           notifications_enabled: boolean
           oxygen: number
+          skill_points: number
+          skills: Json
           trees_saved: number
           tutorial_done: boolean
           unlocked_biomes: string[]
+          unlocked_companions: string[]
           unlocked_grid_size: number
           unlocked_trees: string[]
           updated_at: string
+          xp: number
         }
         Insert: {
           achievements?: string[]
+          active_companions?: string[]
           auto_harvest?: boolean
           created_at?: string
           dark_mode?: boolean
           display_name?: string
+          harvest_tally?: Json
           id: string
+          level?: number
           notifications_enabled?: boolean
           oxygen?: number
+          skill_points?: number
+          skills?: Json
           trees_saved?: number
           tutorial_done?: boolean
           unlocked_biomes?: string[]
+          unlocked_companions?: string[]
           unlocked_grid_size?: number
           unlocked_trees?: string[]
           updated_at?: string
+          xp?: number
         }
         Update: {
           achievements?: string[]
+          active_companions?: string[]
           auto_harvest?: boolean
           created_at?: string
           dark_mode?: boolean
           display_name?: string
+          harvest_tally?: Json
           id?: string
+          level?: number
           notifications_enabled?: boolean
           oxygen?: number
+          skill_points?: number
+          skills?: Json
           trees_saved?: number
           tutorial_done?: boolean
           unlocked_biomes?: string[]
+          unlocked_companions?: string[]
           unlocked_grid_size?: number
           unlocked_trees?: string[]
           updated_at?: string
+          xp?: number
+        }
+        Relationships: []
+      }
+      weather_state: {
+        Row: {
+          duration_ms: number
+          id: number
+          started_at: string
+          updated_at: string
+          weather: string
+        }
+        Insert: {
+          duration_ms?: number
+          id?: number
+          started_at?: string
+          updated_at?: string
+          weather?: string
+        }
+        Update: {
+          duration_ms?: number
+          id?: number
+          started_at?: string
+          updated_at?: string
+          weather?: string
         }
         Relationships: []
       }
