@@ -1,153 +1,164 @@
+# 🎮 Rencana Pengembangan Game — Forest Guardian RPG
 
-# 🌳 Rencana Pengembangan — Forest Guardian RPG
-
-Status saat ini: **MVP sudah jalan** (grid 6×6, plant/grow/harvest/defend, auth email + Google + CORE Wallet, leaderboard global, profile, cloud save). Roadmap di bawah memperluas MVP menjadi game eco-RPG yang dalam, sosial, dan Web3-native.
-
----
-
-## 🎯 Fase 1 — Polish & Retention (Quick Wins)
-
-Tujuan: bikin loop 5 menit lebih nikmat dan engaging tanpa nambah sistem besar.
-
-### 1.1 Game feel & visual
-- Animasi tanam / tumbuh / harvest yang lebih halus (scale + fade), confetti kecil saat harvest mature.
-- Sound effects opsional (toggle di profile): plant pop, harvest chime, threat alarm, defend success.
-- Day/night cycle ringan di background grid (gradient bertransisi tiap 2 menit) — pure CSS, no perf cost.
-- Dark mode support untuk pemain malam.
-
-### 1.2 Onboarding
-- Tutorial 3-langkah pertama kali masuk `/play`: tanam pohon → tunggu tumbuh (skip ke 5 detik) → defend threat dummy.
-- Tooltip kontekstual untuk Energy / Oxygen / Trees Saved di HUD.
-- Tombol "Reset forest" di profile (soft reset stats opsional).
-
-### 1.3 Anti-grind & QoL
-- Auto-harvest opsional (toggle): pohon mature auto-harvest tiap 60 detik agar pemain pasif tetap dapat oxygen kecil.
-- Notifikasi browser saat ada threat aktif (Web Notifications API, opt-in).
-- Offline progress: saat user kembali, hitung tree growth & 1× threat decay sejak `last_tick`.
-
-**Estimasi**: 1 batch implementasi, perubahan terbatas di `src/routes/play.tsx`, `src/lib/game.ts`, dan beberapa komponen UI baru.
+Status: MVP + Fase 1 (Polish) + Fase 2 (8 spesies, biom zona, Ancient ritual, grid 10×10, achievements) sudah jalan. Rencana ini fokus murni pada **sisi game** — gameplay loop, progression, sosial, live-ops — bukan refactor teknis.
 
 ---
 
-## 🌲 Fase 2 — Progression, Ekonomi & Variasi Konten
+## 🎯 Fase 3 — Depth & Strategy (Memberi Pilihan Bermakna)
 
-Tujuan: kasih alasan main lebih dari 1 sesi. Ini fase paling besar.
+Tujuan: ubah dari "tap & wait" jadi "putuskan apa yang ditanam, kapan, di mana".
 
-### 2.1 Level & Guardian XP
-- Tabel baru `public.guardian_progress` (user_id, level, xp, skill_points).
-- XP didapat dari: harvest, defend, daily streak.
-- Tiap level naik → +1 skill point.
+### 3.1 Cuaca dinamis per biom
+- 4 cuaca: ☀️ Cerah, 🌧️ Hujan, 🌫️ Kabut, 🌪️ Badai. Berganti tiap 5 menit (server-driven, sama untuk semua pemain agar fair leaderboard).
+- Efek: Hujan = +20% growth di Rainforest, Badai = ancaman 🪓 lebih sering, Cerah = +10% O₂ harvest, Kabut = pohon Ancient meditasi (feed gratis 1×).
+- HUD nampilin cuaca aktif + countdown.
 
-### 2.2 Skill tree minimalis (3 jalur)
-- 🌱 **Cultivator**: growth speed +%, oxygen yield +%.
-- 🛡️ **Protector**: threat window lebih panjang, auto-defend pertama gratis tiap menit.
-- 💧 **Naturalist**: max energy +, regen rate +.
-- Maksimum ~5 node per jalur agar tetap MVP-flavored.
+### 3.2 Ekosistem tetangga (synergy bonus)
+- Pohon yang ditanam **adjacent** dengan species sejenis dapat +5% O₂ (max +20% dari 4 tetangga).
+- Pohon **berbeda** adjacent → +3% growth speed (biodiversity bonus).
+- Bikin penempatan jadi puzzle ringan.
 
-### 2.3 Tree species expansion
-- Tambah Bamboo (cepat tumbuh, oxygen kecil), Mangrove (tahan threat), Redwood (lambat, oxygen besar).
-- Beberapa species **terkunci** sampai unlocked via level / quest.
-- Tabel `public.unlocked_species` (user_id, species).
+### 3.3 Wildlife companions
+- Setelah harvest 50 mature tree dari satu spesies, hewan companion muncul di forest (🦋 Sakura, 🦉 Oak, 🐼 Bamboo, 🦌 Maple, dst).
+- Companion pasif: +1 energy regen, atau auto-defend 1 threat per 5 menit, atau spawn rate threat ↓.
+- Maks 3 companion aktif dipilih pemain.
 
-### 2.4 Biome & grid expansion
-- Biome kedua: **Coastal** (8×4 grid, fokus mangrove, threat khusus: oil spill 🛢️).
-- Biome ketiga: **Mountain** (5×5, fokus pine/redwood, threat: avalanche ❄️).
-- Tab di `/play` untuk switch biome. Tiap biome punya `forest_states` row tersendiri (refactor schema: composite key `user_id + biome`).
+### 3.4 Skill tree Guardian (3 jalur, 5 node masing-masing)
+- 🌱 **Cultivator**: growth +%, O₂ yield +%, biodiversity bonus 2×.
+- 🛡️ **Protector**: threat window +, auto-defend free per menit, threat damage radius ↓.
+- 💧 **Naturalist**: max energy +, regen +, feed cost ↓.
+- Skill point dari level (XP dari semua aksi). Bisa respec pakai 50 🌰 Acorn.
 
-### 2.5 Daily quests & streak
-- 3 quest harian random ("Tanam 5 sakura", "Defend 3 threat", "Harvest 100 oxygen").
-- Streak counter di profile, bonus XP tiap 7 hari.
-- Tabel `public.daily_quests` + edge function `rotate-quests` (cron via pg_cron) untuk reset 00:00 UTC.
-
-### 2.6 Eco-fact deck yang berkembang
-- Pisahkan fact ke tabel `public.eco_facts` (admin-managed) supaya bisa ditambah tanpa redeploy.
-- Track `seen_facts` per user → prioritaskan fact baru.
-
-**Estimasi**: 3-4 batch implementasi. Migration besar untuk `guardian_progress`, `unlocked_species`, refactor `forest_states` ke multi-biome.
+**Output Fase 3**: 1 migration (`guardian_progress`, `companions`, `weather_state`), 2-3 batch UI.
 
 ---
 
-## 🌍 Fase 3 — Sosial & Web3 Integration
+## 🌲 Fase 4 — Konten Berulang (Daily Loop & Retention)
 
-Tujuan: manfaatkan auth CORE Wallet yang sudah ada untuk bikin lapisan sosial & on-chain.
+Tujuan: kasih alasan login tiap hari.
 
-### 3.1 Friends & co-op
-- Tabel `public.friendships` (requester, addressee, status).
-- Bisa lihat forest teman (read-only view di `/forest/$userId`).
-- "Visit & water" — sekali per hari per teman, kasih +1 growth tick ke 1 pohon mereka.
+### 4.1 Daily quests (3 random per hari)
+- Contoh: "Tanam 5 Sakura", "Defend 8 threat", "Harvest 200 O₂", "Feed 2 Ancient ritual", "Tanam di 3 biom berbeda".
+- Reward: XP + 10-30 🌰 Acorn + chance rare seed.
+- Reset 00:00 WIB, edge function cron.
 
-### 3.2 Guild / Eco-community
-- Tabel `public.guilds` + `public.guild_members`.
-- Total oxygen guild → leaderboard guild mingguan.
-- Guild chat sederhana (Realtime Postgres Changes) — opsional.
+### 4.2 Weekly challenge (1 besar)
+- Misal: "Capai 5,000 O₂ minggu ini", "Grow 3 Ancient Tree", "Survive 50 threat tanpa kehilangan pohon".
+- Reward besar: skin pohon spesial, badge, atau companion eksklusif.
 
-### 3.3 Achievements & badges (NFT-ready)
-- Tabel `public.achievements` (key, label, criteria, rarity).
-- Tabel `public.user_achievements` (user_id, achievement_id, unlocked_at, tx_hash nullable).
-- Badge contoh: "First 1000 Oxygen", "Saved 50 trees", "30-day streak".
+### 4.3 Streak & login bonus
+- Hari 1: 5 energy, Hari 3: 10 🌰, Hari 7: rare seed, Hari 14: companion, Hari 30: skin Ancient golden.
+- Reset jika absen >2 hari.
 
-### 3.4 On-chain badges di CORE Blockchain (opsional, opt-in)
-- Smart contract ERC-1155 sederhana di CORE testnet untuk mint badge.
-- Edge function `mint-badge` pakai relayer wallet (gas dibayar app) atau user-paid (mereka sign sendiri).
-- Display badge gallery di `/profile` dengan link ke `https://scan.coredao.org/token/...`.
-- Tidak wajib — pemain non-wallet tetap dapat badge off-chain.
+### 4.4 Random events di forest
+- Tiap ~15 menit, event muncul: 🌈 "Rainbow drop" (harvest semua mature dapet 2× O₂ untuk 60 detik), 🦗 "Locust swarm" (3 threat sekaligus tapi reward XP besar kalau survive), 🍄 "Mushroom bloom" (+1 tile growth gratis).
 
-### 3.5 Leaderboard improvements
-- Filter: All-time / Weekly / Friends / Guild.
-- Materialized view `weekly_leaderboard` di Postgres, refresh tiap jam.
-
-**Estimasi**: 4-5 batch. Yang on-chain perlu dependency `viem` write side + ABI baru + gas funding strategy yang harus didiskusikan dulu.
+**Output Fase 4**: 1 migration (`daily_quests`, `weekly_challenges`, `streaks`, `events`), edge function cron.
 
 ---
 
-## 🚀 Fase 4 — Live Ops, Konten Berkala & Monetisasi Etis
+## 🌍 Fase 5 — Sosial & Kompetisi
 
-Tujuan: jaga game tetap hidup setelah launch.
+Tujuan: bikin pemain saling lihat, bantu, dan bersaing.
 
-### 4.1 Seasonal events
-- Event 2 minggu sekali: Earth Day, World Forest Day, Hari Lingkungan Hidup.
-- Skin pohon spesial, threat tema, leaderboard event terpisah.
-- Konfigurasi event di tabel `public.events` (start_at, end_at, config JSONB).
+### 5.1 Friends & visit
+- Add friend via username/wallet address.
+- Visit forest teman (read-only) di `/forest/$username`.
+- "Water" 1 pohon teman per hari → +5% growth boost untuk mereka, +5 XP buat kamu.
+- "Gift" 5 energy ke teman per hari (cap 3 teman).
 
-### 4.2 Cosmetics shop (non-pay-to-win)
-- Mata uang in-game **Acorn 🌰** dari achievement & event (bukan microtransaction).
-- Skin tile (ground texture), skin pohon (golden oak, neon sakura), border avatar.
-- Tabel `public.cosmetics` + `public.user_cosmetics`.
+### 5.2 Guild "Eco-Communities"
+- Bentuk/join guild (max 20 anggota).
+- Total O₂ guild → leaderboard guild mingguan.
+- Guild quest: "Kumpulkan 50,000 O₂ minggu ini" → reward distributed ke semua anggota.
+- Guild chat realtime (Supabase Realtime).
 
-### 4.3 Real-world impact tie-in
-- Integrasi opsional dengan API tree-planting (Ecologi / Eden Reforestation / One Tree Planted).
-- Tiap 10.000 oxygen game → 1 pohon nyata didonasikan (sponsor / opsi user top-up CORE).
-- Dashboard "Real trees planted by community" di landing.
+### 5.3 Co-op events: World Tree
+- Event komunitas global tiap 2 minggu: "Tanam 1 juta O₂ bareng" → unlock konten eksklusif untuk semua pemain.
+- Progress bar global di landing page.
 
-### 4.4 Admin & analytics
-- Halaman `/admin` (role-gated via `user_roles` table) untuk:
-  - Lihat metric DAU/WAU.
-  - Tambah eco-fact baru.
-  - Trigger event.
-- Pakai Lovable AI untuk auto-generate eco-fact baru tiap minggu (review manual).
+### 5.4 PvP ringan: Wild Garden
+- Map netral terbuka: pemain bisa "tanam liar" di petak orang lain (musuh).
+- Pemilik bisa cabut (cost 5 energy) atau biarkan tumbuh (dapet 50% O₂ saat harvest).
+- Opt-in — toggle di profile.
 
-### 4.5 Polish teknis akhir
-- PWA: installable, offline shell, ikon proper.
-- SEO per route (sudah ada head meta, tinggal og:image per page).
-- E2E happy-path test untuk plant→grow→harvest loop.
+### 5.5 Leaderboard expansion
+- Filter: All-time / Weekly / Daily / Friends / Guild / Country.
+- Kategori: Total O₂, Trees Saved, Ancient Trees, Streak terpanjang.
 
-**Estimasi**: ongoing, 1 batch per fitur sesuai prioritas user.
+**Output Fase 5**: 3 migration besar, refactor leaderboard query.
+
+---
+
+## 🪙 Fase 6 — Web3 Layer (Pakai CORE Wallet yang Sudah Ada)
+
+Tujuan: manfaatkan auth wallet untuk konten unik, **tanpa pay-to-win**.
+
+### 6.1 Achievement NFT badges (ERC-1155 di CORE)
+- 7 achievement existing → bisa di-mint sebagai NFT badge di CORE Mainnet.
+- Gas: app pakai relayer (sponsored mint) atau user bayar sendiri (~$0.001 di CORE).
+- Display di profile + link ke `scan.coredao.org`.
+- Opsional — pemain non-wallet tetap punya badge off-chain.
+
+### 6.2 Limited seasonal NFT trees
+- Event spesial (Earth Day, Hari Lingkungan 5 Juni): NFT seed eksklusif yang hanya bisa diklaim saat event.
+- Tanam → tumbuh jadi pohon unik dengan visual khusus (Golden Oak, Crystal Sakura, Phoenix Maple).
+- Tradeable di marketplace CORE (di luar app).
+
+### 6.3 Guild treasury on-chain
+- Guild punya wallet multisig di CORE.
+- Anggota bisa donasi 🌰 Acorn (off-chain) atau CORE token (on-chain) ke treasury.
+- Treasury fund event guild eksklusif.
+
+### 6.4 Real-impact tie-in
+- Tiap 10,000 O₂ komunitas → app donasi $1 ke One Tree Planted via CORE token.
+- Dashboard "Real trees planted: X" di landing.
+
+**Output Fase 6**: smart contract ERC-1155 deploy, edge function `mint-badge`, integrasi viem write.
+
+---
+
+## 🎨 Fase 7 — Live Ops & Long-term
+
+Tujuan: jaga game tetap segar setelah launch.
+
+### 7.1 Seasonal events (kalender Indonesia + global)
+- Hari Bumi (22 April), Hari Lingkungan Hidup (5 Juni), Hari Pohon (21 Nov), Tahun Baru.
+- Tema: skin tile, ancaman tema (mis. polusi 🛢️ saat Hari Bumi), leaderboard event terpisah.
+
+### 7.2 Cosmetic shop (Acorn 🌰, bukan duit asli)
+- Skin tile (gurun, salju, neon, vintage).
+- Skin pohon (golden oak, neon sakura, phoenix maple).
+- Frame avatar, animated cursor saat plant/harvest.
+- Acorn earned only — **no IAP**.
+
+### 7.3 Prestige system
+- Setelah Lv 50, bisa "Reincarnate" — reset level + grid, dapet permanent +5% O₂ multiplier (stackable max 5× = +25%).
+- Untuk hardcore players, optional.
+
+### 7.4 Endgame: Sanctuary mode
+- Setelah unlock semua biom + grid 10×10 + 5 Ancient: unlock mode "Sanctuary" — grid 12×12 dengan tantangan harian khusus dan leaderboard terpisah.
 
 ---
 
 ## 📋 Urutan rekomendasi eksekusi
 
-1. **Mulai dari Fase 1** — efek besar, effort kecil, langsung kerasa di preview.
-2. **Pilih 1-2 item dari Fase 2** sebagai milestone berikutnya (saran: Level + Daily Quest dulu, sebelum biome tambahan).
-3. **Fase 3 & 4** dijadwalkan setelah ada basis pemain — tidak prioritas sebelum loop inti benar-benar adiktif.
+| Prioritas | Fase | Alasan |
+|-----------|------|--------|
+| 🔥 Tinggi | **Fase 3** (Cuaca + Synergy + Skill tree) | Memperkaya keputusan tiap sesi, langsung kerasa |
+| 🔥 Tinggi | **Fase 4** (Daily quest + streak + events) | Retention day-2, day-7 — paling penting untuk game baru |
+| 🟡 Sedang | **Fase 5** (Friends + Guild) | Setelah ada base pemain ≥50 |
+| 🟢 Rendah | **Fase 6** (Web3 NFT) | Setelah loop inti adiktif, biar NFT punya makna |
+| 🟢 Rendah | **Fase 7** (Live ops) | Ongoing setelah launch |
 
 ---
 
-## ❓ Yang perlu keputusan sebelum mulai Fase 2+
+## ❓ Keputusan yang dibutuhkan sebelum mulai
 
-- Apakah mau ada **monetisasi** sama sekali? (Roadmap di atas asumsinya cosmetics-only, no IAP nyata.)
-- Untuk **on-chain badges (Fase 3.4)**: gas dibayar siapa — app (relayer) atau user?
-- Apakah event seasonal mengikuti **kalender Indonesia** (Hari Lingkungan Hidup 5 Juni) atau global?
-- Bahasa UI: **Inggris saja**, **Bahasa Indonesia saja**, atau **bilingual i18n**?
+1. **Mulai dari Fase 3 atau Fase 4?** (Saran: Fase 4 dulu — daily quest impact retention paling besar.)
+2. **Skill tree**: respec gratis tiap minggu, atau costly (50 🌰 Acorn)?
+3. **PvP Wild Garden (5.4)**: include atau skip? (Bisa kontroversial untuk game eco-friendly.)
+4. **NFT badge gas**: app bayar (sponsored) atau user bayar?
+5. **Bahasa konten quest/event**: Bahasa Indonesia, Inggris, atau bilingual?
 
-Setelah plan ini disetujui, saya akan langsung jalankan **Fase 1** sebagai batch kerja pertama, lalu kita evaluasi sebelum lanjut ke Fase 2.
+Setelah disetujui, saya rekomendasikan mulai dari **Fase 4.1 + 4.3** (Daily quest + Streak) sebagai batch pertama — paling cepat impact, paling kecil scope.
