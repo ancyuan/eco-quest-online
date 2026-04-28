@@ -769,6 +769,25 @@ function PlayPage() {
       )}
 
       <Encyclopedia open={showEncyclopedia} onOpenChange={setShowEncyclopedia} unlockedTrees={progression.unlocked_trees} />
+
+      <SkillTree
+        open={showSkills}
+        onOpenChange={setShowSkills}
+        skills={skills}
+        skillPoints={skillPoints}
+        level={levelInfo.level}
+        xpInto={levelInfo.into}
+        xpNeed={levelInfo.need}
+        onSpend={handleSpendSkill}
+      />
+      <CompanionPicker
+        open={showCompanions}
+        onOpenChange={setShowCompanions}
+        unlocked={unlockedCompanions}
+        active={activeCompanions}
+        tally={harvestTally}
+        onChange={setActiveCompanions}
+      />
     </main>
   );
 }
