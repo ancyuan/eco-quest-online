@@ -701,6 +701,28 @@ function PlayPage() {
           <span className="rounded-md bg-secondary/60 px-2 py-1">
             ⭐ Lv {levelInfo.level} <span className="text-muted-foreground">({levelInfo.into}/{levelInfo.need})</span>
           </span>
+          <span className="rounded-md bg-secondary/60 px-2 py-1" title="Acorns — earned from quests & streak">
+            🌰 <span className="font-semibold tabular-nums">{acorns}</span>
+          </span>
+          <button onClick={() => setShowStreak(true)}
+            className={`rounded-md border border-border px-2 py-1 font-semibold transition-colors ${
+              canClaimToday(streak) ? "bg-amber-500 text-white animate-pulse" : "bg-card hover:bg-secondary"
+            }`}
+            title={`Login streak: ${streak.current} day${streak.current === 1 ? "" : "s"} (best ${streak.best})`}>
+            🔥 {streak.current}
+          </button>
+          {questState && (() => {
+            const ready = questState.quests.filter(q => q.done >= q.target && !q.claimed).length;
+            return (
+              <button onClick={() => setShowQuests(true)}
+                className={`rounded-md border border-border px-2 py-1 font-semibold transition-colors ${
+                  ready > 0 ? "bg-primary text-primary-foreground animate-pulse" : "bg-card hover:bg-secondary"
+                }`}
+                title="Daily quests">
+                📜 Quests{ready > 0 ? ` (${ready})` : ""}
+              </button>
+            );
+          })()}
           <button onClick={() => setShowSkills(true)}
             className={`ml-auto rounded-md border border-border px-2 py-1 font-semibold transition-colors ${
               skillPoints > 0 ? "bg-primary text-primary-foreground animate-pulse" : "bg-card hover:bg-secondary"
@@ -873,6 +895,20 @@ function PlayPage() {
         active={activeCompanions}
         tally={harvestTally}
         onChange={setActiveCompanions}
+      />
+      {questState && (
+        <DailyQuests
+          open={showQuests}
+          onOpenChange={setShowQuests}
+          state={questState}
+          onClaim={handleClaimQuest}
+        />
+      )}
+      <StreakBonus
+        open={showStreak}
+        onOpenChange={setShowStreak}
+        streak={streak}
+        onClaim={handleClaimStreak}
       />
     </main>
   );
