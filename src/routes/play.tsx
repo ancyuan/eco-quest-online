@@ -504,6 +504,7 @@ function PlayPage() {
       const now = Date.now();
       setEnergy(e => e - feedCost);
       setXp(x => x + XP_FEED);
+      emitQuestEvent({ type: "feed" });
       setFeedLog(prev => {
         const next = { ...prev, [tile.index]: [...(prev[tile.index] ?? []), now] };
         // promote to ancient if ritual complete
@@ -512,6 +513,7 @@ function PlayPage() {
           setProgression(p => ({ ...p, ancient_count: p.ancient_count + 1 }));
           setAnimatingTiles(a => ({ ...a, [tile.index]: "ancient" }));
           setConfettiTrigger(Date.now());
+          emitQuestEvent({ type: "ancient" });
           toast.success("🌳 Ancient Tree awakened!", { description: "Massive O₂ on next harvest!" });
           setTimeout(() => setAnimatingTiles(a => { const { [tile.index]: _, ...r } = a; return r; }), 600);
         } else {
@@ -530,6 +532,7 @@ function PlayPage() {
       ));
       setTreesSaved(s => s + 1);
       setXp(x => x + XP_DEFEND);
+      emitQuestEvent({ type: "defend" });
       toast.success(`Saved your tree from ${THREATS[tile.threat].label.toLowerCase()}!`);
       return;
     }
@@ -549,6 +552,7 @@ function PlayPage() {
       // tally for companion unlocks
       const harvestedKind = tile.kind;
       setHarvestTally(prev => bumpTally(prev, harvestedKind, 1));
+      emitQuestEvent({ type: "harvest", kind: harvestedKind, biome, isAncient, oxygen: gain });
       setAnimatingTiles(a => ({ ...a, [tile.index]: "harvest" }));
       setConfettiTrigger(Date.now());
       setTimeout(() => setAnimatingTiles(a => { const { [tile.index]: _, ...r } = a; return r; }), 400);
@@ -572,6 +576,7 @@ function PlayPage() {
       setEnergy(e => e - PLANT_COST);
       setXp(x => x + XP_PLANT);
       speciesPlantedRef.current.add(selectedKind);
+      emitQuestEvent({ type: "plant", kind: selectedKind, biome });
       setAnimatingTiles(a => ({ ...a, [tile.index]: "pop" }));
       setTimeout(() => setAnimatingTiles(a => { const { [tile.index]: _, ...r } = a; return r; }), 350);
       setTiles(prev => prev.map(t =>
@@ -597,6 +602,7 @@ function PlayPage() {
     setEnergy(e => e - PLANT_COST);
     setXp(x => x + XP_PLANT);
     speciesPlantedRef.current.add(kind);
+    emitQuestEvent({ type: "plant", kind, biome });
     const now = Date.now();
     setTiles(prev => prev.map(t =>
       t.index === target.index
