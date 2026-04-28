@@ -327,16 +327,19 @@ function PlayPage() {
     if (!hydrated) return;
     const interval = setInterval(() => {
       const now = Date.now();
+      const threatWindow = effectiveThreatWindowMs(skills);
+      const threatProb = THREAT_SPAWN_PROB * WEATHERS[weather].threatProbMul * compEff.threatProbMul;
       setTiles((prev) => {
         const next = prev.map((t) => {
           if (!t.kind || !t.plantedAt) return t;
           if (t.threat && t.threatExpiresAt && t.threatExpiresAt <= now) return { index: t.index };
           const isAncient = t.stage === "ancient";
-          const stage = computeStage(t.plantedAt, now, t.kind, isAncient);
+          const biome = biomeForTile(biomeZones, t.index);
+          const stage = computeStageEff(t.plantedAt, now, t.kind, biome, weather, skills, activeCompanions, isAncient);
           let updated: Tile = { ...t, stage };
-          if ((stage === "mature" || stage === "ancient") && !t.threat && Math.random() < THREAT_SPAWN_PROB) {
+          if ((stage === "mature" || stage === "ancient") && !t.threat && Math.random() < threatProb) {
             const newThreat = randomThreat();
-            updated = { ...updated, threat: newThreat, threatExpiresAt: now + THREAT_WINDOW_MS };
+            updated = { ...updated, threat: newThreat, threatExpiresAt: now + threatWindow };
             if (prefs.notifications_enabled && (now - (lastNotifiedRef.current[t.index] ?? 0)) > 30_000) {
               lastNotifiedRef.current[t.index] = now;
               notify("🌳 Forest Guardian", `${THREATS[newThreat].emoji} ${THREATS[newThreat].label} attacking your tree!`);
@@ -349,7 +352,24 @@ function PlayPage() {
 
       if (now - lastEnergyTickRef.current >= ENERGY_REGEN_MS) {
         lastEnergyTickRef.current = now;
-        setEnergy((e) => Math.min(ENERGY_MAX, e + 1));
+        setEnergy((e) => Math.min(maxEnergy, e + 1 + compEff.energyTickBonus));
+      }
+
+      // Companion auto-defend (Pine Fox + Protector skill stacks)
+      const autoDefendInterval = compEff.autoDefendPerMs > 0 ? 1 / compEff.autoDefendPerMs : 0;
+      const protectorAuto = (skills["auto_defend"] ?? 0) > 0 ? 60_000 / (skills["auto_defend"] ?? 1) : 0;
+      const interval2 = autoDefendInterval && protectorAuto ? Math.min(autoDefendInterval, protectorAuto)
+                       : autoDefendInterval || protectorAuto;
+      if (interval2 > 0 && now - lastAutoDefendRef.current >= interval2) {
+        setTiles(prev => {
+          const idx = prev.findIndex(t => t.threat);
+          if (idx === -1) return prev;
+          lastAutoDefendRef.current = now;
+          setTreesSaved(s => s + 1);
+          setXp(x => x + XP_DEFEND);
+          toast.success("🛡️ Auto-defend triggered");
+          return prev.map((t, i) => i === idx ? { ...t, threat: undefined, threatExpiresAt: undefined } : t);
+        });
       }
 
       if (prefs.auto_harvest && now - lastAutoHarvestRef.current >= AUTO_HARVEST_MS) {
@@ -360,7 +380,12 @@ function PlayPage() {
           const next = prev.map((t) => {
             if (t.kind && (t.stage === "mature" || t.stage === "ancient") && !t.threat) {
               const biome = biomeForTile(biomeZones, t.index);
-              oxygenGained += Math.floor(harvestYield(t.kind, biome, t.stage === "ancient") / 2);
+              const synergy = synergyMultiplier(prev, gridSize, t.index, t.kind);
+              const yld = harvestYieldFull({
+                kind: t.kind, biome, isAncient: t.stage === "ancient",
+                weather, skills, companions: activeCompanions, synergyMul: synergy,
+              });
+              oxygenGained += Math.floor(yld / 2);
               energyGained += 1;
               return { index: t.index };
             }
@@ -368,14 +393,14 @@ function PlayPage() {
           });
           if (oxygenGained > 0) {
             setOxygen((o) => o + oxygenGained);
-            setEnergy((e) => Math.min(ENERGY_MAX, e + energyGained));
+            setEnergy((e) => Math.min(maxEnergy, e + energyGained));
           }
           return next;
         });
       }
     }, TICK_MS);
     return () => clearInterval(interval);
-  }, [hydrated, prefs.auto_harvest, prefs.notifications_enabled, biomeZones]);
+  }, [hydrated, prefs.auto_harvest, prefs.notifications_enabled, biomeZones, weather, skills, activeCompanions, gridSize, maxEnergy, compEff]);
 
   // Persist on changes
   useEffect(() => {
