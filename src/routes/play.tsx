@@ -551,6 +551,38 @@ function PlayPage() {
     [progression.unlocked_trees]
   );
 
+  // Level-up: award skill points
+  useEffect(() => {
+    if (!hydrated) return;
+    const lvl = levelInfo.level;
+    if (lvl > lastLevelRef.current) {
+      const gained = lvl - lastLevelRef.current;
+      lastLevelRef.current = lvl;
+      setSkillPoints(p => p + gained);
+      toast.success(`🎉 Level ${lvl}!`, { description: `+${gained} skill point` });
+    }
+  }, [levelInfo.level, hydrated]);
+
+  // Companion unlocks based on tally
+  useEffect(() => {
+    if (!hydrated) return;
+    const fresh = evaluateCompanionUnlocks(harvestTally, unlockedCompanions);
+    if (fresh.length === 0) return;
+    setUnlockedCompanions(prev => [...prev, ...fresh]);
+    fresh.forEach(id => toast.success(`🐾 Companion befriended!`, { description: id }));
+  }, [harvestTally, unlockedCompanions, hydrated]);
+
+  const handleSpendSkill = (id: string) => {
+    if (skillPoints < 1) return;
+    const node = SKILL_TREE.find(n => n.id === id);
+    if (!node) return;
+    const cur = skills[id] ?? 0;
+    if (cur >= node.maxRank) return;
+    setSkillPoints(p => p - 1);
+    setSkills(prev => ({ ...prev, [id]: cur + 1 }));
+    toast.success(`${node.emoji} ${node.label} → rank ${cur + 1}`);
+  };
+
   if (loading || !user) {
     return <div className="p-10 text-center text-muted-foreground">Loading your forest…</div>;
   }
