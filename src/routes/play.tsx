@@ -403,6 +403,7 @@ function PlayPage() {
           lastAutoDefendRef.current = now;
           setTreesSaved(s => s + 1);
           setXp(x => x + XP_DEFEND);
+          emitQuestEvent({ type: "defend" });
           toast.success("🛡️ Auto-defend triggered");
           return prev.map((t, i) => i === idx ? { ...t, threat: undefined, threatExpiresAt: undefined } : t);
         });
