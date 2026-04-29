@@ -669,8 +669,27 @@ function PlayPage() {
     toast.success(`${node.emoji} ${node.label} → rank ${cur + 1}`);
   };
 
-  if (loading || !user) {
+  if (loading) {
     return <div className="p-10 text-center text-muted-foreground">Loading your forest…</div>;
+  }
+
+  if (!user) {
+    return (
+      <main className="flex min-h-[calc(100vh-3.5rem)] items-center justify-center bg-background px-4 py-12">
+        <div className="max-w-md text-center">
+          <h1 className="text-2xl font-bold text-foreground">Sign in to enter your forest</h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Your progress, quests, and streak are tied to your account.
+          </p>
+          <Link
+            to="/auth"
+            className="mt-6 inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+          >
+            Go to sign in
+          </Link>
+        </div>
+      </main>
+    );
   }
 
   const canExpand = progression.unlocked_grid_size > gridSize;
