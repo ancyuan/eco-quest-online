@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as WildRouteImport } from './routes/wild'
 import { Route as ProfileRouteImport } from './routes/profile'
 import { Route as PlayRouteImport } from './routes/play'
 import { Route as LeaderboardRouteImport } from './routes/leaderboard'
@@ -17,6 +18,11 @@ import { Route as AuthRouteImport } from './routes/auth'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ForestUsernameRouteImport } from './routes/forest.$username'
 
+const WildRoute = WildRouteImport.update({
+  id: '/wild',
+  path: '/wild',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ProfileRoute = ProfileRouteImport.update({
   id: '/profile',
   path: '/profile',
@@ -60,6 +66,7 @@ export interface FileRoutesByFullPath {
   '/leaderboard': typeof LeaderboardRoute
   '/play': typeof PlayRoute
   '/profile': typeof ProfileRoute
+  '/wild': typeof WildRoute
   '/forest/$username': typeof ForestUsernameRoute
 }
 export interface FileRoutesByTo {
@@ -69,6 +76,7 @@ export interface FileRoutesByTo {
   '/leaderboard': typeof LeaderboardRoute
   '/play': typeof PlayRoute
   '/profile': typeof ProfileRoute
+  '/wild': typeof WildRoute
   '/forest/$username': typeof ForestUsernameRoute
 }
 export interface FileRoutesById {
@@ -79,6 +87,7 @@ export interface FileRoutesById {
   '/leaderboard': typeof LeaderboardRoute
   '/play': typeof PlayRoute
   '/profile': typeof ProfileRoute
+  '/wild': typeof WildRoute
   '/forest/$username': typeof ForestUsernameRoute
 }
 export interface FileRouteTypes {
@@ -90,6 +99,7 @@ export interface FileRouteTypes {
     | '/leaderboard'
     | '/play'
     | '/profile'
+    | '/wild'
     | '/forest/$username'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -99,6 +109,7 @@ export interface FileRouteTypes {
     | '/leaderboard'
     | '/play'
     | '/profile'
+    | '/wild'
     | '/forest/$username'
   id:
     | '__root__'
@@ -108,6 +119,7 @@ export interface FileRouteTypes {
     | '/leaderboard'
     | '/play'
     | '/profile'
+    | '/wild'
     | '/forest/$username'
   fileRoutesById: FileRoutesById
 }
@@ -118,11 +130,19 @@ export interface RootRouteChildren {
   LeaderboardRoute: typeof LeaderboardRoute
   PlayRoute: typeof PlayRoute
   ProfileRoute: typeof ProfileRoute
+  WildRoute: typeof WildRoute
   ForestUsernameRoute: typeof ForestUsernameRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/wild': {
+      id: '/wild'
+      path: '/wild'
+      fullPath: '/wild'
+      preLoaderRoute: typeof WildRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/profile': {
       id: '/profile'
       path: '/profile'
@@ -182,6 +202,7 @@ const rootRouteChildren: RootRouteChildren = {
   LeaderboardRoute: LeaderboardRoute,
   PlayRoute: PlayRoute,
   ProfileRoute: ProfileRoute,
+  WildRoute: WildRoute,
   ForestUsernameRoute: ForestUsernameRoute,
 }
 export const routeTree = rootRouteImport
