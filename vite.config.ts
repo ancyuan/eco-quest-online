@@ -9,10 +9,13 @@ import { loadEnv } from "vite";
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
+  const fallbackProjectId = "hkmswiugkahpaahzmajc";
+  const fallbackSupabaseUrl = `https://${fallbackProjectId}.supabase.co`;
+  const fallbackPublishableKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhrbXN3aXVna2FocGFhaHptYWpjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcxMzc4NzUsImV4cCI6MjA5MjcxMzg3NX0.hq_Y4zVtxQyCvgD7ZyN7awusDss6qIQhYyyWH2d7zPo";
 
-  const publicSupabaseUrl = env.VITE_SUPABASE_URL || env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || "";
-  const publicSupabaseKey = env.VITE_SUPABASE_PUBLISHABLE_KEY || env.SUPABASE_PUBLISHABLE_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_PUBLISHABLE_KEY || "";
-  const publicProjectId = env.VITE_SUPABASE_PROJECT_ID || env.SUPABASE_PROJECT_ID || process.env.VITE_SUPABASE_PROJECT_ID || process.env.SUPABASE_PROJECT_ID || "";
+  const publicSupabaseUrl = env.VITE_SUPABASE_URL || env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || fallbackSupabaseUrl;
+  const publicSupabaseKey = env.VITE_SUPABASE_PUBLISHABLE_KEY || env.SUPABASE_PUBLISHABLE_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_PUBLISHABLE_KEY || fallbackPublishableKey;
+  const publicProjectId = env.VITE_SUPABASE_PROJECT_ID || env.SUPABASE_PROJECT_ID || process.env.VITE_SUPABASE_PROJECT_ID || process.env.SUPABASE_PROJECT_ID || fallbackProjectId;
   const publicAnonKey = env.VITE_SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || publicSupabaseKey;
 
   return {
