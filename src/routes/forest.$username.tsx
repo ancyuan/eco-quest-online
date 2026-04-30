@@ -109,7 +109,6 @@ function VisitPage() {
       setTiles(updated);
     }
     // give actor +5 XP
-    await supabase.rpc("noop"); // placeholder to keep call shape
     const { data: meProf } = await supabase.from("profiles").select("xp").eq("id", user.id).maybeSingle();
     if (meProf) {
       await supabase.from("profiles").update({ xp: (meProf.xp ?? 0) + 5 }).eq("id", user.id);
