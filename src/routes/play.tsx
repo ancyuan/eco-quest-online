@@ -241,6 +241,27 @@ function PlayPage() {
           toast.success(`Welcome back! +${energyGained} 💧 energy regenerated while away`);
         }
       }
+
+      // Claim pending gift energy from friends (Phase 5.1)
+      try {
+        const claimedKey = `fg-claimed-gifts-${user.id}`;
+        const claimedIds: string[] = JSON.parse(localStorage.getItem(claimedKey) || "[]");
+        const { data: gifts } = await supabase
+          .from("friend_actions")
+          .select("id, actor_id, day")
+          .eq("target_id", user.id)
+          .eq("kind", "gift")
+          .order("created_at", { ascending: false })
+          .limit(20);
+        const fresh = (gifts ?? []).filter(g => !claimedIds.includes(g.id));
+        if (fresh.length > 0) {
+          const totalEnergy = fresh.length * 5;
+          setEnergy(e => Math.min(maxEnergy, e + totalEnergy));
+          localStorage.setItem(claimedKey, JSON.stringify([...claimedIds, ...fresh.map(g => g.id)].slice(-200)));
+          toast.success(`🎁 +${totalEnergy} 💧 energy dari ${fresh.length} hadiah teman!`);
+        }
+      } catch { /* non-fatal */ }
+
       setHydrated(true);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps

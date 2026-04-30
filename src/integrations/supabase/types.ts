@@ -83,6 +83,57 @@ export type Database = {
         }
         Relationships: []
       }
+      friend_actions: {
+        Row: {
+          actor_id: string
+          created_at: string
+          day: string
+          id: string
+          kind: string
+          target_id: string
+        }
+        Insert: {
+          actor_id: string
+          created_at?: string
+          day?: string
+          id?: string
+          kind: string
+          target_id: string
+        }
+        Update: {
+          actor_id?: string
+          created_at?: string
+          day?: string
+          id?: string
+          kind?: string
+          target_id?: string
+        }
+        Relationships: []
+      }
+      friendships: {
+        Row: {
+          created_at: string
+          friend_id: string
+          id: string
+          status: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          friend_id: string
+          id?: string
+          status?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          friend_id?: string
+          id?: string
+          status?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           achievements: string[]
@@ -110,6 +161,8 @@ export type Database = {
           unlocked_grid_size: number
           unlocked_trees: string[]
           updated_at: string
+          username: string | null
+          wild_garden_optin: boolean
           xp: number
         }
         Insert: {
@@ -138,6 +191,8 @@ export type Database = {
           unlocked_grid_size?: number
           unlocked_trees?: string[]
           updated_at?: string
+          username?: string | null
+          wild_garden_optin?: boolean
           xp?: number
         }
         Update: {
@@ -166,6 +221,8 @@ export type Database = {
           unlocked_grid_size?: number
           unlocked_trees?: string[]
           updated_at?: string
+          username?: string | null
+          wild_garden_optin?: boolean
           xp?: number
         }
         Relationships: []
@@ -191,6 +248,33 @@ export type Database = {
           started_at?: string
           updated_at?: string
           weather?: string
+        }
+        Relationships: []
+      }
+      wild_garden: {
+        Row: {
+          growth_ms: number
+          kind: string
+          planted_at: string
+          planter_id: string
+          tile_index: number
+          updated_at: string
+        }
+        Insert: {
+          growth_ms?: number
+          kind: string
+          planted_at?: string
+          planter_id: string
+          tile_index: number
+          updated_at?: string
+        }
+        Update: {
+          growth_ms?: number
+          kind?: string
+          planted_at?: string
+          planter_id?: string
+          tile_index?: number
+          updated_at?: string
         }
         Relationships: []
       }
