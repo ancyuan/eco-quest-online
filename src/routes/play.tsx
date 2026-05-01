@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
-import { useEffect, useRef, useState, useCallback, useMemo } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo, lazy, Suspense } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { toast } from "sonner";
@@ -33,6 +33,10 @@ import {
   applyEvent, claimQuest, claimStreak, fromWire, toWire, canClaimToday,
   type DailyQuestState, type DailyQuestStateWire, type QuestEvent, type StreakState,
 } from "@/lib/quests";
+import { useView3D, isWebGLAvailable } from "@/lib/view3d";
+
+// Lazy-load 3D scene so the ~200KB three.js bundle isn't pulled into the initial /play chunk
+const Forest3D = lazy(() => import("@/three/Forest3D"));
 
 export const Route = createFileRoute("/play")({
   head: () => ({
@@ -58,6 +62,9 @@ function PlayPage() {
   const { prefs, update: updatePrefs } = usePreferences();
   const weatherState = useWeather();
   const weather = weatherState.weather;
+  const view3d = useView3D();
+  const webgl = useMemo(() => isWebGLAvailable(), []);
+  const use3D = view3d.enabled && webgl;
 
   const [gridSize, setGridSize] = useState(6);
   const [biomeZones, setBiomeZones] = useState<Record<number, Biome>>({});
@@ -813,28 +820,54 @@ function PlayPage() {
               {BIOMES[b].emoji} {BIOMES[b].label} <span className="opacity-60">+{BIOMES[b].oxygenBonusPct}%</span>
             </span>
           ))}
+          <button
+            onClick={view3d.toggle}
+            disabled={!webgl}
+            title={webgl ? "Toggle 2D / 3D view" : "WebGL not available on this device"}
+            className="ml-auto inline-flex items-center gap-1 rounded-full border border-border bg-card px-2.5 py-1 text-xs font-semibold hover:bg-secondary disabled:opacity-50"
+          >
+            {use3D ? "🟦 2D" : "🧊 3D"}
+          </button>
         </div>
 
-        {/* Grid */}
-        <div
-          className="daynight-bg grid gap-1.5 rounded-2xl border border-border p-3 shadow-[var(--shadow-card)]"
-          style={{ gridTemplateColumns: `repeat(${gridSize}, minmax(0, 1fr))` }}
-        >
-          {tiles.map(tile => {
-            const biome = biomeForTile(biomeZones, tile.index);
-            return (
-              <TileButton
-                key={tile.index}
-                tile={tile}
-                biome={biome}
-                feedCount={feedProgress(feedLog, tile.index)}
-                feedingMode={feedingMode}
-                animation={animatingTiles[tile.index]}
-                onClick={() => handleTileClick(tile)}
-              />
-            );
-          })}
-        </div>
+        {/* Grid (2D or 3D) */}
+        {use3D ? (
+          <Suspense
+            fallback={
+              <div className="daynight-bg flex h-[480px] items-center justify-center rounded-2xl border border-border text-sm text-muted-foreground">
+                Loading 3D forest…
+              </div>
+            }
+          >
+            <Forest3D
+              tiles={tiles}
+              gridSize={gridSize}
+              biomeZones={biomeZones}
+              feedingMode={feedingMode}
+              onTileClick={handleTileClick}
+            />
+          </Suspense>
+        ) : (
+          <div
+            className="daynight-bg grid gap-1.5 rounded-2xl border border-border p-3 shadow-[var(--shadow-card)]"
+            style={{ gridTemplateColumns: `repeat(${gridSize}, minmax(0, 1fr))` }}
+          >
+            {tiles.map(tile => {
+              const biome = biomeForTile(biomeZones, tile.index);
+              return (
+                <TileButton
+                  key={tile.index}
+                  tile={tile}
+                  biome={biome}
+                  feedCount={feedProgress(feedLog, tile.index)}
+                  feedingMode={feedingMode}
+                  animation={animatingTiles[tile.index]}
+                  onClick={() => handleTileClick(tile)}
+                />
+              );
+            })}
+          </div>
+        )}
 
         {/* Actions */}
         <div className="mt-4 flex flex-wrap gap-2">
