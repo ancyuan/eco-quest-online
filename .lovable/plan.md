@@ -1,164 +1,118 @@
-# 🎮 Rencana Pengembangan Game — Forest Guardian RPG
 
-Status: MVP + Fase 1 (Polish) + Fase 2 (8 spesies, biom zona, Ancient ritual, grid 10×10, achievements) sudah jalan. Rencana ini fokus murni pada **sisi game** — gameplay loop, progression, sosial, live-ops — bukan refactor teknis.
+# Rencana Pengembangan 3D Low-Poly — Forest Guardian
 
----
+Tujuan: ubah tampilan utama dari grid emoji 2D menjadi **forest 3D low-poly** yang ramah mobile, tetap mempertahankan seluruh gameplay loop (plant, grow, threat, harvest, ancient ritual, weather, companion, quest, social) yang sudah berjalan.
 
-## 🎯 Fase 3 — Depth & Strategy (Memberi Pilihan Bermakna)
+Prinsip:
+- **Tidak menghapus 2D** — render 3D adalah lapisan visual baru di atas state yang sama (`tiles[]`, `weather`, dst). Toggle 2D/3D di settings.
+- **Low-poly murni** — tanpa asset eksternal berat. Semua mesh dibuat prosedural (cone + cylinder + box) supaya bundle tetap kecil dan render cepat di HP.
+- **Bertahap** — tiap fase punya output yang langsung playable, tidak ada "big bang rewrite".
 
-Tujuan: ubah dari "tap & wait" jadi "putuskan apa yang ditanam, kapan, di mana".
-
-### 3.1 Cuaca dinamis per biom
-- 4 cuaca: ☀️ Cerah, 🌧️ Hujan, 🌫️ Kabut, 🌪️ Badai. Berganti tiap 5 menit (server-driven, sama untuk semua pemain agar fair leaderboard).
-- Efek: Hujan = +20% growth di Rainforest, Badai = ancaman 🪓 lebih sering, Cerah = +10% O₂ harvest, Kabut = pohon Ancient meditasi (feed gratis 1×).
-- HUD nampilin cuaca aktif + countdown.
-
-### 3.2 Ekosistem tetangga (synergy bonus)
-- Pohon yang ditanam **adjacent** dengan species sejenis dapat +5% O₂ (max +20% dari 4 tetangga).
-- Pohon **berbeda** adjacent → +3% growth speed (biodiversity bonus).
-- Bikin penempatan jadi puzzle ringan.
-
-### 3.3 Wildlife companions
-- Setelah harvest 50 mature tree dari satu spesies, hewan companion muncul di forest (🦋 Sakura, 🦉 Oak, 🐼 Bamboo, 🦌 Maple, dst).
-- Companion pasif: +1 energy regen, atau auto-defend 1 threat per 5 menit, atau spawn rate threat ↓.
-- Maks 3 companion aktif dipilih pemain.
-
-### 3.4 Skill tree Guardian (3 jalur, 5 node masing-masing)
-- 🌱 **Cultivator**: growth +%, O₂ yield +%, biodiversity bonus 2×.
-- 🛡️ **Protector**: threat window +, auto-defend free per menit, threat damage radius ↓.
-- 💧 **Naturalist**: max energy +, regen +, feed cost ↓.
-- Skill point dari level (XP dari semua aksi). Bisa respec pakai 50 🌰 Acorn.
-
-**Output Fase 3**: 1 migration (`guardian_progress`, `companions`, `weather_state`), 2-3 batch UI.
+Stack pilihan: **react-three-fiber + drei + three** (ekosistem React, deklaratif, mature di mobile). Bundle ~200KB gzip — acceptable untuk game.
 
 ---
 
-## 🌲 Fase 4 — Konten Berulang (Daily Loop & Retention)
+## Fase 3D-1 — Fondasi Scene & Grid (Playable Skeleton)
 
-Tujuan: kasih alasan login tiap hari.
+Output: route `/play` punya tombol "Switch to 3D". Saat aktif, grid 2D diganti scene 3D yang menampilkan tile kosong + pohon yang sudah ditanam, dengan kamera orbit. Semua interaksi (plant, harvest) tetap jalan via klik tile 3D.
 
-### 4.1 Daily quests (3 random per hari)
-- Contoh: "Tanam 5 Sakura", "Defend 8 threat", "Harvest 200 O₂", "Feed 2 Ancient ritual", "Tanam di 3 biom berbeda".
-- Reward: XP + 10-30 🌰 Acorn + chance rare seed.
-- Reset 00:00 WIB, edge function cron.
+Pekerjaan:
+- Install `three`, `@react-three/fiber`, `@react-three/drei`.
+- `src/three/Scene.tsx` — Canvas + lighting (1 directional + ambient + hemisphere) + OrbitControls (terbatas, no roll, jarak min/max).
+- `src/three/Ground.tsx` — plane low-poly dengan warna per biom (rainforest/savanna/taiga). Subdivide untuk vertex displacement ringan agar tidak flat.
+- `src/three/Tile.tsx` — hex atau square tile (pakai square dulu, sesuai grid existing). Hover state = sedikit naik + outline. Click = panggil handler yang sama dengan versi 2D (`onTileClick(index)`).
+- `src/three/trees/` — 1 file per spesies (Oak, Pine, Sakura, Maple, Mangrove, Bamboo, Cherry, Eucalyptus). Tiap pohon = composition cone/cylinder/sphere prosedural, parameterized by `stage` (seed = nub kecil, sapling = small cone, mature = full, ancient = full + glow).
+- `src/three/Forest3D.tsx` — komponen utama yang menerima `tiles, gridSize, biomeZones` dan render array Tile + Tree.
+- Toggle: tambah field `view3d: boolean` di `usePreferences`. Tombol di header `/play`.
 
-### 4.2 Weekly challenge (1 besar)
-- Misal: "Capai 5,000 O₂ minggu ini", "Grow 3 Ancient Tree", "Survive 50 threat tanpa kehilangan pohon".
-- Reward besar: skin pohon spesial, badge, atau companion eksklusif.
-
-### 4.3 Streak & login bonus
-- Hari 1: 5 energy, Hari 3: 10 🌰, Hari 7: rare seed, Hari 14: companion, Hari 30: skin Ancient golden.
-- Reset jika absen >2 hari.
-
-### 4.4 Random events di forest
-- Tiap ~15 menit, event muncul: 🌈 "Rainbow drop" (harvest semua mature dapet 2× O₂ untuk 60 detik), 🦗 "Locust swarm" (3 threat sekaligus tapi reward XP besar kalau survive), 🍄 "Mushroom bloom" (+1 tile growth gratis).
-
-**Output Fase 4**: 1 migration (`daily_quests`, `weekly_challenges`, `streaks`, `events`), edge function cron.
+Definisi selesai: bisa plant pohon di mode 3D, lihat stage berubah real-time, harvest dengan klik. Mode 2D masih default & tidak rusak.
 
 ---
 
-## 🌍 Fase 5 — Sosial & Kompetisi
+## Fase 3D-2 — Animasi, Threat & Weather Visual
 
-Tujuan: bikin pemain saling lihat, bantu, dan bersaing.
+Output: dunia 3D terasa "hidup" — pohon tumbuh dengan animasi, ancaman muncul sebagai mesh 3D di atas tile, cuaca mengubah skybox & particle.
 
-### 5.1 Friends & visit
-- Add friend via username/wallet address.
-- Visit forest teman (read-only) di `/forest/$username`.
-- "Water" 1 pohon teman per hari → +5% growth boost untuk mereka, +5 XP buat kamu.
-- "Gift" 5 energy ke teman per hari (cap 3 teman).
+Pekerjaan:
+- **Tree growth animation**: interpolasi scale & sway saat `stage` berubah (gunakan `useFrame` untuk subtle sway sin-wave; saat stage transition, lerp scale 0.3s).
+- **Ancient glow**: pohon ancient diberi `emissiveIntensity` pulsing + ring partikel kecil di pangkal.
+- **Threat visuals**:
+  - 🔥 Fire = particle cone merah/orange di atas tile + tile berkedip.
+  - 🪓 Logger = mesh kapak low-poly muncul, swing animation.
+  - 🐛 Pest = beberapa kubus kecil bergerak di sekitar pohon.
+  - Countdown ring (Torus) di sekitar tile menunjukkan `threatExpiresAt`.
+- **Weather**:
+  - ☀️ Cerah: skybox biru cerah, lighting hangat.
+  - 🌧️ Hujan: particle rain (instanced lines), darken ambient, ripple di ground shader sederhana.
+  - 🌫️ Kabut: `<Fog>` putih, jarak pendek.
+  - 🌪️ Badai: fog gelap + rain + occasional lightning (flash directional intensity).
+- **Companion 3D**: butterfly/owl/panda/deer sebagai mesh sederhana yang berkeliaran (random walk path) di atas grid. Reuse data dari `companions` state.
 
-### 5.2 Guild "Eco-Communities"
-- Bentuk/join guild (max 20 anggota).
-- Total O₂ guild → leaderboard guild mingguan.
-- Guild quest: "Kumpulkan 50,000 O₂ minggu ini" → reward distributed ke semua anggota.
-- Guild chat realtime (Supabase Realtime).
-
-### 5.3 Co-op events: World Tree
-- Event komunitas global tiap 2 minggu: "Tanam 1 juta O₂ bareng" → unlock konten eksklusif untuk semua pemain.
-- Progress bar global di landing page.
-
-### 5.4 PvP ringan: Wild Garden
-- Map netral terbuka: pemain bisa "tanam liar" di petak orang lain (musuh).
-- Pemilik bisa cabut (cost 5 energy) atau biarkan tumbuh (dapet 50% O₂ saat harvest).
-- Opt-in — toggle di profile.
-
-### 5.5 Leaderboard expansion
-- Filter: All-time / Weekly / Daily / Friends / Guild / Country.
-- Kategori: Total O₂, Trees Saved, Ancient Trees, Streak terpanjang.
-
-**Output Fase 5**: 3 migration besar, refactor leaderboard query.
+Definisi selesai: pemain bisa main full sesi di 3D dan secara visual semua event terlihat (plant, grow, threat spawn, defend, harvest, weather change, companion).
 
 ---
 
-## 🪙 Fase 6 — Web3 Layer (Pakai CORE Wallet yang Sudah Ada)
+## Fase 3D-3 — Polish, Performa & Mobile
 
-Tujuan: manfaatkan auth wallet untuk konten unik, **tanpa pay-to-win**.
+Output: 3D mode siap jadi default — frame rate stabil di HP mid-range, kontrol intuitif di touch.
 
-### 6.1 Achievement NFT badges (ERC-1155 di CORE)
-- 7 achievement existing → bisa di-mint sebagai NFT badge di CORE Mainnet.
-- Gas: app pakai relayer (sponsored mint) atau user bayar sendiri (~$0.001 di CORE).
-- Display di profile + link ke `scan.coredao.org`.
-- Opsional — pemain non-wallet tetap punya badge off-chain.
+Pekerjaan:
+- **Instanced meshes**: pohon dengan stage sama di-render via `<Instances>` drei untuk hemat draw call (penting untuk grid 10×10 = 100 tile).
+- **LOD sederhana**: ancient tree pakai mesh detail tinggi, mature pakai medium, sapling/seed pakai sprite billboard.
+- **Mobile controls**:
+  - Single tap = select/plant/harvest tile.
+  - Two-finger drag = orbit kamera.
+  - Pinch = zoom (clamp).
+  - Disable `OrbitControls` damping di low-end device.
+- **Adaptive quality**: deteksi `devicePixelRatio` & FPS via `PerformanceMonitor` drei. Auto-degrade: matikan rain particles, kurangi shadow map size, switch ke `flat` shading.
+- **Loading state**: Suspense fallback dengan progress sederhana (canvas masih cold-start ~300ms).
+- **A11y / fallback**: jika `navigator.gpu`/WebGL2 tidak tersedia atau Canvas error → auto-fallback ke 2D + toast "3D tidak tersedia di device ini".
+- **Settings panel**: slider quality (Low/Med/High), toggle shadows, toggle particles.
 
-### 6.2 Limited seasonal NFT trees
-- Event spesial (Earth Day, Hari Lingkungan 5 Juni): NFT seed eksklusif yang hanya bisa diklaim saat event.
-- Tanam → tumbuh jadi pohon unik dengan visual khusus (Golden Oak, Crystal Sakura, Phoenix Maple).
-- Tradeable di marketplace CORE (di luar app).
-
-### 6.3 Guild treasury on-chain
-- Guild punya wallet multisig di CORE.
-- Anggota bisa donasi 🌰 Acorn (off-chain) atau CORE token (on-chain) ke treasury.
-- Treasury fund event guild eksklusif.
-
-### 6.4 Real-impact tie-in
-- Tiap 10,000 O₂ komunitas → app donasi $1 ke One Tree Planted via CORE token.
-- Dashboard "Real trees planted: X" di landing.
-
-**Output Fase 6**: smart contract ERC-1155 deploy, edge function `mint-badge`, integrasi viem write.
+Definisi selesai: tested di Chrome desktop + Safari iOS + Chrome Android mid-range, ≥30 FPS di grid 10×10.
 
 ---
 
-## 🎨 Fase 7 — Live Ops & Long-term
+## Fase 3D-4 — Konten Visual Lanjutan (Optional / Long-tail)
 
-Tujuan: jaga game tetap segar setelah launch.
+Hanya dikerjakan setelah 3D-1..3 stabil dan user feedback positif.
 
-### 7.1 Seasonal events (kalender Indonesia + global)
-- Hari Bumi (22 April), Hari Lingkungan Hidup (5 Juni), Hari Pohon (21 Nov), Tahun Baru.
-- Tema: skin tile, ancaman tema (mis. polusi 🛢️ saat Hari Bumi), leaderboard event terpisah.
-
-### 7.2 Cosmetic shop (Acorn 🌰, bukan duit asli)
-- Skin tile (gurun, salju, neon, vintage).
-- Skin pohon (golden oak, neon sakura, phoenix maple).
-- Frame avatar, animated cursor saat plant/harvest.
-- Acorn earned only — **no IAP**.
-
-### 7.3 Prestige system
-- Setelah Lv 50, bisa "Reincarnate" — reset level + grid, dapet permanent +5% O₂ multiplier (stackable max 5× = +25%).
-- Untuk hardcore players, optional.
-
-### 7.4 Endgame: Sanctuary mode
-- Setelah unlock semua biom + grid 10×10 + 5 Ancient: unlock mode "Sanctuary" — grid 12×12 dengan tantangan harian khusus dan leaderboard terpisah.
+- **Day/Night cycle** sinkron dengan jam server (ground & sky lerp warna).
+- **Skin pohon** (untuk Fase 7 cosmetic shop): variant material per skin (golden, neon, crystal) — tinggal swap material di komponen tree.
+- **Visit forest teman dalam 3D**: route `/forest/$username` ikut switch ke 3D mode (read-only camera).
+- **Wild Garden 3D**: grid 20×20 — perlu instancing agresif + frustum culling.
+- **Confetti 3D**: ganti `<Confetti />` 2D dengan particle 3D saat unlock achievement / harvest besar.
+- **Mini cinematic**: saat ancient ritual selesai, kamera auto-zoom + slow pan + glow sweep selama 2 detik.
 
 ---
 
-## 📋 Urutan rekomendasi eksekusi
+## Catatan teknis (untuk implementasi nanti)
 
-| Prioritas | Fase | Alasan |
-|-----------|------|--------|
-| 🔥 Tinggi | **Fase 3** (Cuaca + Synergy + Skill tree) | Memperkaya keputusan tiap sesi, langsung kerasa |
-| 🔥 Tinggi | **Fase 4** (Daily quest + streak + events) | Retention day-2, day-7 — paling penting untuk game baru |
-| 🟡 Sedang | **Fase 5** (Friends + Guild) | Setelah ada base pemain ≥50 |
-| 🟢 Rendah | **Fase 6** (Web3 NFT) | Setelah loop inti adiktif, biar NFT punya makna |
-| 🟢 Rendah | **Fase 7** (Live ops) | Ongoing setelah launch |
+- **SSR**: R3F harus di-render client-only. Bungkus `<Forest3D>` dengan dynamic check `typeof window !== 'undefined'` atau gunakan `useEffect`-mounted state. Route file tetap SSR-able untuk SEO header.
+- **Bundle splitting**: import three/r3f via `React.lazy` di dalam `/play` agar landing page tidak ikut menanggung 200KB.
+- **State source of truth tetap `tiles[]` di play.tsx** — komponen 3D adalah pure renderer + emit events. Tidak ada duplikasi state, tidak ada konflik dengan logika quest/social yang sudah ada.
+- **Tidak ada perubahan database / migration** yang diperlukan untuk seluruh roadmap 3D ini. Hanya satu kolom preference baru (`view3d`) yang disimpan lokal via `usePreferences` (sudah ada infrastrukturnya).
+- **Dependency baru** (~tambahan ke `package.json`):
+  - `three` (~150KB gz)
+  - `@react-three/fiber` (~30KB gz)
+  - `@react-three/drei` (tree-shakeable, ambil hanya `OrbitControls`, `Instances`, `PerformanceMonitor`, `Sky`, `Cloud`)
 
 ---
 
-## ❓ Keputusan yang dibutuhkan sebelum mulai
+## Urutan rekomendasi eksekusi
 
-1. **Mulai dari Fase 3 atau Fase 4?** (Saran: Fase 4 dulu — daily quest impact retention paling besar.)
-2. **Skill tree**: respec gratis tiap minggu, atau costly (50 🌰 Acorn)?
-3. **PvP Wild Garden (5.4)**: include atau skip? (Bisa kontroversial untuk game eco-friendly.)
-4. **NFT badge gas**: app bayar (sponsored) atau user bayar?
-5. **Bahasa konten quest/event**: Bahasa Indonesia, Inggris, atau bilingual?
+| Prioritas | Fase | Estimasi scope |
+|-----------|------|----------------|
+| 🔥 Mulai dulu | **3D-1** Skeleton scene + tile + 8 species procedural | Batch besar, 1 sesi |
+| 🔥 Berikutnya | **3D-2** Animasi + threat + weather visual | Batch besar, 1 sesi |
+| 🟡 Setelah feedback | **3D-3** Performa + mobile + fallback | Batch sedang |
+| 🟢 Long-tail | **3D-4** Day/night, skin, wild garden 3D | On-demand |
 
-Setelah disetujui, saya rekomendasikan mulai dari **Fase 4.1 + 4.3** (Daily quest + Streak) sebagai batch pertama — paling cepat impact, paling kecil scope.
+---
+
+## Pertanyaan sebelum mulai
+
+1. **Style art**: full low-poly geometric (cone/cube — paling cepat, "Monument Valley" vibe) **atau** soft low-poly (rounded edges, gradient — butuh lebih banyak vertex tapi lebih lembut)?
+2. **Default view setelah 3D-3 selesai**: 3D jadi default, atau 2D tetap default & 3D opt-in?
+3. **Kamera**: free-orbit (player bisa putar bebas) atau fixed isometric (lebih sederhana, lebih konsisten visual)?
+4. **Mulai dari Fase 3D-1 sekarang**?
