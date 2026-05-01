@@ -1,5 +1,7 @@
 import { useMemo } from "react";
 import * as THREE from "three";
+// Side-effect import: registers three.js intrinsic JSX elements (mesh, group, etc.)
+import "@react-three/fiber";
 import type { TreeKind, GrowthStage } from "@/lib/game";
 
 // Stage-based scale (seed → ancient)
