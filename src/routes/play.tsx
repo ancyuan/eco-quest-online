@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
-import { useEffect, useRef, useState, useCallback, useMemo } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo, lazy, Suspense } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { toast } from "sonner";
@@ -33,6 +33,10 @@ import {
   applyEvent, claimQuest, claimStreak, fromWire, toWire, canClaimToday,
   type DailyQuestState, type DailyQuestStateWire, type QuestEvent, type StreakState,
 } from "@/lib/quests";
+import { useView3D, isWebGLAvailable } from "@/lib/view3d";
+
+// Lazy-load 3D scene so the ~200KB three.js bundle isn't pulled into the initial /play chunk
+const Forest3D = lazy(() => import("@/three/Forest3D"));
 
 export const Route = createFileRoute("/play")({
   head: () => ({
