@@ -62,6 +62,9 @@ function PlayPage() {
   const { prefs, update: updatePrefs } = usePreferences();
   const weatherState = useWeather();
   const weather = weatherState.weather;
+  const view3d = useView3D();
+  const webgl = useMemo(() => isWebGLAvailable(), []);
+  const use3D = view3d.enabled && webgl;
 
   const [gridSize, setGridSize] = useState(6);
   const [biomeZones, setBiomeZones] = useState<Record<number, Biome>>({});
