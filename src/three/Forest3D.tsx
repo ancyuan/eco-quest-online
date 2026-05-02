@@ -1,17 +1,20 @@
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
-import * as THREE from "three";
 import {
-  TREES,
   THREATS,
-  BIOMES,
+  THREAT_WINDOW_MS,
   computeStage,
   biomeForTile,
   type Tile,
   type Biome,
+  type Weather,
+  type CompanionId,
 } from "@/lib/game";
 import { Tree3D } from "./trees";
+import { ThreatMesh } from "./Threats";
+import { WeatherSky, WeatherLight, WeatherEffects } from "./Weather3D";
+import { Companions3D } from "./Companions3D";
 
 const TILE_SIZE = 1.0;
 const TILE_GAP = 0.08;
@@ -28,6 +31,8 @@ interface Forest3DProps {
   biomeZones: Record<number, Biome>;
   feedingMode: boolean;
   onTileClick: (tile: Tile) => void;
+  weather: Weather;
+  activeCompanions: CompanionId[];
 }
 
 function gridPosition(index: number, gridSize: number): [number, number] {
@@ -101,45 +106,20 @@ function TileMesh({
         </group>
       )}
 
-      {/* Threat indicator */}
+      {/* Threat 3D mesh */}
       {tile.threat && (
-        <ThreatBillboard kind={THREATS[tile.threat].emoji} />
+        <group position={[0, 0.07, 0]}>
+          <ThreatMesh kind={tile.threat} expiresAt={tile.threatExpiresAt} windowMs={THREAT_WINDOW_MS} />
+        </group>
       )}
     </group>
   );
 }
 
-function ThreatBillboard({ kind }: { kind: string }) {
-  const ref = useRef<THREE.Group>(null);
-  useFrame((state) => {
-    if (!ref.current) return;
-    ref.current.position.y = 1.4 + Math.sin(state.clock.elapsedTime * 4) * 0.08;
-    ref.current.rotation.y += 0.02;
-  });
-  return (
-    <group ref={ref} position={[0, 1.4, 0]}>
-      <mesh>
-        <sphereGeometry args={[0.18, 8, 8]} />
-        <meshStandardMaterial
-          color="#ff4444"
-          emissive="#ff8800"
-          emissiveIntensity={0.6}
-          flatShading
-        />
-      </mesh>
-      {/* simple cone "spike" so it reads as a warning */}
-      <mesh position={[0, -0.18, 0]}>
-        <coneGeometry args={[0.1, 0.18, 6]} />
-        <meshStandardMaterial color="#ff4444" emissive="#ff8800" emissiveIntensity={0.4} flatShading />
-      </mesh>
-    </group>
-  );
-}
-
-function Scene({ tiles, gridSize, biomeZones, feedingMode, onTileClick }: Forest3DProps) {
+function Scene({ tiles, gridSize, biomeZones, feedingMode, onTileClick, weather, activeCompanions }: Forest3DProps) {
   const [now, setNow] = useState(() => Date.now());
 
-  // Update "now" once per second so growth stages tick visually
+  // Update "now" every ~500ms so growth stages tick visually
   useFrame(() => {
     const t = Date.now();
     if (t - now > 500) setNow(t);
@@ -150,23 +130,13 @@ function Scene({ tiles, gridSize, biomeZones, feedingMode, onTileClick }: Forest
     [tiles, gridSize]
   );
 
+  const areaRadius = (gridSize * (TILE_SIZE + TILE_GAP)) / 2;
+
   return (
     <>
-      <ambientLight intensity={0.55} />
-      <hemisphereLight args={["#bcd9ff", "#3a5a3a", 0.45]} />
-      <directionalLight
-        position={[6, 10, 4]}
-        intensity={1.1}
-        castShadow
-        shadow-mapSize-width={1024}
-        shadow-mapSize-height={1024}
-        shadow-camera-near={0.5}
-        shadow-camera-far={30}
-        shadow-camera-left={-10}
-        shadow-camera-right={10}
-        shadow-camera-top={10}
-        shadow-camera-bottom={-10}
-      />
+      <WeatherSky weather={weather} />
+      <WeatherLight weather={weather} />
+      <WeatherEffects weather={weather} />
 
       {/* Ground plane (slightly below tiles) */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.1, 0]} receiveShadow>
@@ -185,23 +155,27 @@ function Scene({ tiles, gridSize, biomeZones, feedingMode, onTileClick }: Forest
           now={now}
         />
       ))}
+
+      <Companions3D active={activeCompanions} areaRadius={areaRadius * 1.1} />
     </>
   );
 }
 
 export default function Forest3D(props: Forest3DProps) {
   const camDistance = Math.max(7, props.gridSize * 1.4);
+  // Suppress unused-var warnings for re-exports
+  void THREATS;
   return (
-    <div className="daynight-bg rounded-2xl border border-border shadow-[var(--shadow-card)] overflow-hidden"
-         style={{ height: 480, touchAction: "none" }}>
+    <div
+      className="rounded-2xl border border-border shadow-[var(--shadow-card)] overflow-hidden"
+      style={{ height: 480, touchAction: "none" }}
+    >
       <Canvas
         shadows
         dpr={[1, 1.75]}
         camera={{ position: [camDistance, camDistance * 0.9, camDistance], fov: 45 }}
         gl={{ antialias: true, powerPreference: "high-performance" }}
       >
-        <color attach="background" args={["#a8d8ea"]} />
-        <fog attach="fog" args={["#a8d8ea", camDistance * 1.6, camDistance * 3.5]} />
         <Scene {...props} />
         <OrbitControls
           enablePan={false}
@@ -216,7 +190,3 @@ export default function Forest3D(props: Forest3DProps) {
     </div>
   );
 }
-
-// Suppress unused warning for TREES/BIOMES (keep imports for future expansion)
-void TREES;
-void BIOMES;
