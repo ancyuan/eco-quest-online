@@ -845,6 +845,8 @@ function PlayPage() {
               biomeZones={biomeZones}
               feedingMode={feedingMode}
               onTileClick={handleTileClick}
+              weather={weather}
+              activeCompanions={activeCompanions}
             />
           </Suspense>
         ) : (
