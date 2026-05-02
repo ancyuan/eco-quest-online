@@ -1,7 +1,8 @@
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
 import * as THREE from "three";
 // Side-effect import: registers three.js intrinsic JSX elements (mesh, group, etc.)
 import "@react-three/fiber";
+import { useFrame } from "@react-three/fiber";
 import type { TreeKind, GrowthStage } from "@/lib/game";
 
 // Stage-based scale (seed → ancient)
@@ -205,5 +206,42 @@ const TREE_COMPONENTS: Record<TreeKind, React.FC<{ stage: GrowthStage }>> = {
 export function Tree3D({ kind, stage }: TreeProps) {
   const Component = TREE_COMPONENTS[kind];
   if (!Component) return null;
-  return <Component stage={stage} />;
+  return (
+    <AnimatedTreeWrapper stage={stage}>
+      <Component stage={stage} />
+    </AnimatedTreeWrapper>
+  );
+}
+
+// Wraps any tree mesh: smooth scale-in on growth + subtle wind sway + ancient pulse
+function AnimatedTreeWrapper({
+  stage,
+  children,
+}: {
+  stage: GrowthStage;
+  children: React.ReactNode;
+}) {
+  const group = useRef<THREE.Group>(null);
+  const startRef = useRef<number>(performance.now());
+  const seedRef = useRef<number>(Math.random() * Math.PI * 2);
+
+  useFrame((state) => {
+    if (!group.current) return;
+    const elapsed = (performance.now() - startRef.current) / 300; // 300ms grow-in
+    const grow = Math.min(1, elapsed);
+    // Ease-out cubic
+    const eased = 1 - Math.pow(1 - grow, 3);
+    const t = state.clock.elapsedTime;
+    const sway = Math.sin(t * 1.3 + seedRef.current) * 0.04;
+    const pulse = stage === "ancient" ? 1 + Math.sin(t * 2.2) * 0.03 : 1;
+    group.current.scale.setScalar(eased * pulse);
+    group.current.rotation.z = sway;
+  });
+
+  // Reset grow animation each time stage changes
+  useMemo(() => {
+    startRef.current = performance.now();
+  }, [stage]);
+
+  return <group ref={group}>{children}</group>;
 }
