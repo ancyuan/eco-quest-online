@@ -34,6 +34,7 @@ import {
   type DailyQuestState, type DailyQuestStateWire, type QuestEvent, type StreakState,
 } from "@/lib/quests";
 import { useView3D, isWebGLAvailable } from "@/lib/view3d";
+import { ErrorBoundary3D } from "@/three/ErrorBoundary3D";
 
 // Lazy-load 3D scene so the ~200KB three.js bundle isn't pulled into the initial /play chunk
 const Forest3D = lazy(() => import("@/three/Forest3D"));
@@ -832,23 +833,30 @@ function PlayPage() {
 
         {/* Grid (2D or 3D) */}
         {use3D ? (
-          <Suspense
-            fallback={
-              <div className="daynight-bg flex h-[480px] items-center justify-center rounded-2xl border border-border text-sm text-muted-foreground">
-                Loading 3D forest…
-              </div>
-            }
+          <ErrorBoundary3D
+            onError={() => {
+              view3d.setEnabled(false);
+              toast.error("3D tidak tersedia di perangkat ini, kembali ke mode 2D");
+            }}
           >
-            <Forest3D
-              tiles={tiles}
-              gridSize={gridSize}
-              biomeZones={biomeZones}
-              feedingMode={feedingMode}
-              onTileClick={handleTileClick}
-              weather={weather}
-              activeCompanions={activeCompanions}
-            />
-          </Suspense>
+            <Suspense
+              fallback={
+                <div className="daynight-bg flex h-[480px] items-center justify-center rounded-2xl border border-border text-sm text-muted-foreground">
+                  Loading 3D forest…
+                </div>
+              }
+            >
+              <Forest3D
+                tiles={tiles}
+                gridSize={gridSize}
+                biomeZones={biomeZones}
+                feedingMode={feedingMode}
+                onTileClick={handleTileClick}
+                weather={weather}
+                activeCompanions={activeCompanions}
+              />
+            </Suspense>
+          </ErrorBoundary3D>
         ) : (
           <div
             className="daynight-bg grid gap-1.5 rounded-2xl border border-border p-3 shadow-[var(--shadow-card)]"

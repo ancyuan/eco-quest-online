@@ -5,6 +5,12 @@ import "@react-three/fiber";
 import { useFrame } from "@react-three/fiber";
 import type { TreeKind, GrowthStage } from "@/lib/game";
 
+// Tree detail level (LOD) — controls mesh complexity per quality preset
+export type TreeDetail = "low" | "med" | "high";
+let CURRENT_DETAIL: TreeDetail = "high";
+export function setTreeDetail(d: TreeDetail) { CURRENT_DETAIL = d; }
+function getDetail(): TreeDetail { return CURRENT_DETAIL; }
+
 // Stage-based scale (seed → ancient)
 const STAGE_SCALE: Record<GrowthStage, number> = {
   seed: 0.25,
@@ -206,10 +212,29 @@ const TREE_COMPONENTS: Record<TreeKind, React.FC<{ stage: GrowthStage }>> = {
 export function Tree3D({ kind, stage }: TreeProps) {
   const Component = TREE_COMPONENTS[kind];
   if (!Component) return null;
+  const detail = getDetail();
+  // LOD: seed/sapling at low/med become a billboard sprite (cheapest)
+  if (detail === "low" && (stage === "seed" || stage === "sapling")) {
+    return (
+      <AnimatedTreeWrapper stage={stage}>
+        <SeedSprite />
+      </AnimatedTreeWrapper>
+    );
+  }
   return (
     <AnimatedTreeWrapper stage={stage}>
       <Component stage={stage} />
     </AnimatedTreeWrapper>
+  );
+}
+
+// Cheap billboard for seed/sapling at low detail — single mesh, no anim children
+function SeedSprite() {
+  return (
+    <mesh position={[0, 0.15, 0]}>
+      <coneGeometry args={[0.12, 0.3, 4]} />
+      <meshStandardMaterial color="#5fa040" flatShading />
+    </mesh>
   );
 }
 
