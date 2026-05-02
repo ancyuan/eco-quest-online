@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
-import { OrbitControls, PerformanceMonitor, Instances, Instance } from "@react-three/drei";
+import { OrbitControls, PerformanceMonitor } from "@react-three/drei";
 import * as THREE from "three";
 import {
   THREATS,
@@ -163,9 +163,6 @@ function Scene({
       })}
 
       <Companions3D active={activeCompanions} areaRadius={areaRadius * 1.1} />
-
-      {/* Touch unused-import warnings */}
-      {false && <Instances><Instance /></Instances>}
     </>
   );
 }
