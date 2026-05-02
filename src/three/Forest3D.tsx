@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
 import { OrbitControls, PerformanceMonitor, Instances, Instance } from "@react-three/drei";
+import * as THREE from "three";
 import {
   THREATS,
   THREAT_WINDOW_MS,
@@ -218,7 +219,7 @@ export default function Forest3D(props: Forest3DProps) {
             maxPolarAngle={Math.PI / 2.2}
             enableDamping={level !== "low"}
             dampingFactor={0.08}
-            touches={{ ONE: 2 /* TOUCH.ROTATE */, TWO: 1 /* TOUCH.DOLLY_PAN */ }}
+            touches={{ ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN }}
           />
         </Canvas>
       </div>
