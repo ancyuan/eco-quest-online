@@ -131,8 +131,9 @@ export function Rain({ count = 400, area = 14, intensity = 1 }: { count?: number
   );
 }
 
-export function WeatherEffects({ weather }: { weather: Weather }) {
-  if (weather === "rain") return <Rain count={500} area={14} intensity={1} />;
-  if (weather === "storm") return <Rain count={800} area={16} intensity={1.6} />;
+export function WeatherEffects({ weather, rainCount = 500 }: { weather: Weather; rainCount?: number }) {
+  if (rainCount <= 0) return null;
+  if (weather === "rain") return <Rain count={rainCount} area={14} intensity={1} />;
+  if (weather === "storm") return <Rain count={Math.round(rainCount * 1.6)} area={16} intensity={1.6} />;
   return null;
 }
