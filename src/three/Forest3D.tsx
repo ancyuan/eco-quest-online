@@ -180,6 +180,7 @@ function Scene({
 export default function Forest3D(props: Forest3DProps) {
   const { level, setLevel, settings } = useQuality();
   const [autoLevel, setAutoLevel] = useState<QualityLevel | null>(null);
+  const [dayFactor, setDayFactor] = useState(() => getDayFactor());
   const camDistance = Math.max(7, props.gridSize * 1.4);
   void THREATS;
 
@@ -187,6 +188,12 @@ export default function Forest3D(props: Forest3DProps) {
   useEffect(() => {
     setTreeDetail(settings.treeDetail);
   }, [settings.treeDetail]);
+
+  // Refresh day/night factor every minute
+  useEffect(() => {
+    const id = setInterval(() => setDayFactor(getDayFactor()), 60_000);
+    return () => clearInterval(id);
+  }, []);
 
   const effective = autoLevel ? QUALITY_PRESETS[autoLevel] : settings;
 
@@ -217,6 +224,7 @@ export default function Forest3D(props: Forest3DProps) {
             {...props}
             rainCount={effective.particles ? effective.rainCount : 0}
             shadows={effective.shadows}
+            dayFactor={dayFactor}
           />
           <OrbitControls
             enablePan={false}
