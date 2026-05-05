@@ -108,9 +108,7 @@ function Scene({
   shadows,
   readOnly,
   dayFactor,
-}: Forest3DProps & { rainCount: number; shadows: boolean }) {
-  rainCount: number; shadows: boolean; dayFactor: number;
-}) {
+}: Forest3DProps & { rainCount: number; shadows: boolean; dayFactor: number }) {
   const [now, setNow] = useState(() => Date.now());
 
   useFrame(() => {
@@ -127,8 +125,8 @@ function Scene({
 
   return (
     <>
-      <WeatherSky weather={weather} />
-      <WeatherLight weather={weather} />
+      <WeatherSky weather={weather} dayFactor={dayFactor} />
+      <WeatherLight weather={weather} dayFactor={dayFactor} />
       {shadows ? null : null /* shadow toggle controlled at canvas level */}
       <WeatherEffects weather={weather} rainCount={rainCount} />
 
@@ -154,6 +152,7 @@ function Scene({
               feedingMode={feedingMode}
               position={pos}
               onClick={() => onTileClick(tile)}
+              readOnly={readOnly}
             />
             {tile.kind && stage && (
               <group position={[pos[0], 0.06, pos[1]]}>
