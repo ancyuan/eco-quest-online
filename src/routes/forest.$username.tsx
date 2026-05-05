@@ -1,10 +1,15 @@
 import { createFileRoute, Link, useParams } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useState, lazy, Suspense } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { toast } from "sonner";
 import { TREES, BIOMES, type Tile, type Biome, type TreeKind, computeStage, biomeForTile, defaultBiomeZones } from "@/lib/game";
 import { FRIEND_GIFT_AMOUNT, FRIEND_GIFT_DAILY_CAP, FRIEND_WATER_DAILY_CAP, todayUTC } from "@/lib/social";
+import { useView3D, isWebGLAvailable } from "@/lib/view3d";
+import { useWeather } from "@/lib/weather";
+import { ErrorBoundary3D } from "@/three/ErrorBoundary3D";
+
+const Forest3D = lazy(() => import("@/three/Forest3D"));
 
 export const Route = createFileRoute("/forest/$username")({
   head: ({ params }) => ({
@@ -28,6 +33,10 @@ interface ProfileLite {
 function VisitPage() {
   const { username } = useParams({ from: "/forest/$username" });
   const { user } = useAuth();
+  const view3d = useView3D();
+  const webgl = isWebGLAvailable();
+  const use3D = view3d.enabled && webgl;
+  const weatherState = useWeather();
   const [target, setTarget] = useState<ProfileLite | null>(null);
   const [tiles, setTiles] = useState<Tile[]>([]);
   const [gridSize, setGridSize] = useState(6);
@@ -162,8 +171,17 @@ function VisitPage() {
             <h1 className="text-2xl font-bold text-foreground">{target.display_name}'s Forest</h1>
             <p className="text-sm text-muted-foreground font-mono">@{target.username} · Lv {target.level} · 💨 {target.oxygen} · 🌳 {target.trees_saved}</p>
           </div>
-          {!isOwn && user && (
-            <div className="flex gap-2">
+          <div className="flex gap-2">
+            {webgl && (
+              <button
+                onClick={view3d.toggle}
+                className="rounded-md border border-border px-3 py-2 text-xs font-semibold"
+              >
+                {use3D ? "🟦 2D" : "🧊 3D"}
+              </button>
+            )}
+            {!isOwn && user && (
+              <>
               <button
                 onClick={handleWater}
                 disabled={busy || waterUsed >= 1}
@@ -178,10 +196,32 @@ function VisitPage() {
               >
                 🎁 Gift {FRIEND_GIFT_AMOUNT}💧 ({FRIEND_GIFT_DAILY_CAP - giftUsed} left)
               </button>
-            </div>
-          )}
+              </>
+            )}
+          </div>
         </div>
 
+        {use3D ? (
+          <ErrorBoundary3D onError={() => { view3d.setEnabled(false); toast.error("3D crashed, kembali ke 2D"); }}>
+            <Suspense fallback={<div className="text-center text-sm text-muted-foreground py-10">Loading 3D…</div>}>
+              <Forest3D
+                tiles={tiles.map(t => ({
+                  ...t,
+                  stage: t.kind && t.plantedAt
+                    ? (t.stage === "ancient" ? "ancient" : computeStage(t.plantedAt, now, t.kind as TreeKind, false))
+                    : t.stage,
+                }))}
+                gridSize={gridSize}
+                biomeZones={biomeZones}
+                feedingMode={false}
+                onTileClick={() => { /* read-only */ }}
+                weather={weatherState.weather}
+                activeCompanions={[]}
+                readOnly
+              />
+            </Suspense>
+          </ErrorBoundary3D>
+        ) : (
         <div
           className="mx-auto grid gap-1.5 rounded-2xl border border-border bg-card p-3"
           style={{ gridTemplateColumns: `repeat(${gridSize}, minmax(0, 1fr))`, maxWidth: 640 }}
@@ -207,6 +247,7 @@ function VisitPage() {
             );
           })}
         </div>
+        )}
 
         <p className="mt-3 text-center text-xs text-muted-foreground">
           Read-only. Water memberimu +5 XP per teman/hari. Gift mengirim {FRIEND_GIFT_AMOUNT} energy
