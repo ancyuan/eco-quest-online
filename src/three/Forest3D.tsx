@@ -12,6 +12,7 @@ import {
   type Weather,
   type CompanionId,
 } from "@/lib/game";
+import { getDayFactor } from "./Weather3D";
 import { Tree3D, setTreeDetail } from "./trees";
 import { ThreatMesh } from "./Threats";
 import { WeatherSky, WeatherLight, WeatherEffects } from "./Weather3D";
@@ -35,6 +36,7 @@ interface Forest3DProps {
   onTileClick: (tile: Tile) => void;
   weather: Weather;
   activeCompanions: CompanionId[];
+  readOnly?: boolean;
 }
 
 function gridPosition(index: number, gridSize: number): [number, number] {
@@ -51,29 +53,34 @@ function TileTop({
   feedingMode,
   position,
   onClick,
+  readOnly,
 }: {
   biome: Biome;
   feedingMode: boolean;
   position: [number, number];
   onClick: () => void;
+  readOnly?: boolean;
 }) {
   const [hovered, setHovered] = useState(false);
   const baseColor = BIOME_COLORS[biome];
-  const highlight = hovered || feedingMode;
+  const highlight = (!readOnly && hovered) || feedingMode;
   return (
     <mesh
-      position={[position[0], hovered ? 0.04 : 0, position[1]]}
+      position={[position[0], !readOnly && hovered ? 0.04 : 0, position[1]]}
       onPointerOver={(e) => {
+        if (readOnly) return;
         e.stopPropagation();
         setHovered(true);
         document.body.style.cursor = "pointer";
       }}
       onPointerOut={() => {
+        if (readOnly) return;
         setHovered(false);
         document.body.style.cursor = "";
       }}
       onClick={(e) => {
         e.stopPropagation();
+        if (readOnly) return;
         onClick();
       }}
     >
@@ -99,7 +106,11 @@ function Scene({
   activeCompanions,
   rainCount,
   shadows,
+  readOnly,
+  dayFactor,
 }: Forest3DProps & { rainCount: number; shadows: boolean }) {
+  rainCount: number; shadows: boolean; dayFactor: number;
+}) {
   const [now, setNow] = useState(() => Date.now());
 
   useFrame(() => {
