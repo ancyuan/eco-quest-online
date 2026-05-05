@@ -1,14 +1,19 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, lazy, Suspense } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { toast } from "sonner";
 import { TREES, type TreeKind } from "@/lib/game";
+import { useView3D, isWebGLAvailable } from "@/lib/view3d";
+import { useWeather } from "@/lib/weather";
+import { ErrorBoundary3D } from "@/three/ErrorBoundary3D";
 import {
   WILD_GRID_SIZE, WILD_TILES, WILD_PLANT_ENERGY, WILD_UPROOT_ENERGY,
   WILD_GROWTH_MS, WILD_OWNER_HARVEST, WILD_VISITOR_HARVEST,
   wildStage, type WildTile,
 } from "@/lib/social";
+
+const Wild3D = lazy(() => import("@/three/Wild3D"));
 
 export const Route = createFileRoute("/wild")({
   head: () => ({
@@ -25,6 +30,10 @@ const ALLOWED_KINDS: TreeKind[] = ["oak", "pine", "sakura", "bamboo"];
 function WildPage() {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
+  const view3d = useView3D();
+  const webgl = isWebGLAvailable();
+  const use3D = view3d.enabled && webgl;
+  const weatherState = useWeather();
   const [optIn, setOptIn] = useState(false);
   const [energy, setEnergy] = useState(0);
   const [tiles, setTiles] = useState<Record<number, WildTile>>({});
@@ -171,6 +180,15 @@ function WildPage() {
           <div className="flex items-center gap-3 text-sm">
             <span className="rounded-md bg-secondary px-3 py-1.5 font-medium">💧 {energy}</span>
             <span className="rounded-md bg-secondary px-3 py-1.5 font-medium">🌱 milikmu: {myCount}</span>
+            {webgl && (
+              <button
+                onClick={view3d.toggle}
+                className="rounded-md border border-border px-3 py-1.5 text-xs font-semibold"
+                title="Toggle 2D/3D"
+              >
+                {use3D ? "🟦 2D" : "🧊 3D"}
+              </button>
+            )}
             <button
               onClick={toggleOptIn}
               className={`rounded-md px-3 py-1.5 text-xs font-semibold transition-colors ${optIn ? "bg-primary text-primary-foreground" : "border border-border"}`}
@@ -199,6 +217,18 @@ function WildPage() {
 
         {!hydrated ? (
           <div className="text-center text-sm text-muted-foreground py-10">Loading map…</div>
+        ) : use3D ? (
+          <ErrorBoundary3D onError={() => { view3d.setEnabled(false); toast.error("3D crashed, kembali ke 2D"); }}>
+            <Suspense fallback={<div className="text-center text-sm text-muted-foreground py-10">Loading 3D…</div>}>
+              <Wild3D
+                gridSize={WILD_GRID_SIZE}
+                tiles={tiles}
+                myUserId={user.id}
+                weather={weatherState.weather}
+                onTileClick={handleClick}
+              />
+            </Suspense>
+          </ErrorBoundary3D>
         ) : (
           <div
             className="mx-auto grid gap-0.5 rounded-2xl border border-border bg-card p-2"
