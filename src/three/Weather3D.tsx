@@ -23,29 +23,61 @@ const FOG_FAR: Record<Weather, number> = {
   storm: 24,
 };
 
-export function WeatherSky({ weather }: { weather: Weather }) {
+// Night sky tint per weather — multiplied/lerped against day color
+const NIGHT_COLORS: Record<Weather, string> = {
+  sunny: "#0e1530",
+  rain: "#0a1020",
+  fog: "#1a2030",
+  storm: "#05080f",
+};
+
+function lerpHexColor(a: string, b: string, t: number): string {
+  const ca = new THREE.Color(a);
+  const cb = new THREE.Color(b);
+  return ca.lerp(cb, t).getStyle();
+}
+
+/**
+ * dayFactor: 0 = midnight, 1 = noon. Returns smooth value based on local hour.
+ */
+export function getDayFactor(date = new Date()): number {
+  const h = date.getHours() + date.getMinutes() / 60;
+  // Smooth sin curve: peak at 13:00, lowest at 01:00
+  const phase = ((h - 1) / 24) * Math.PI * 2;
+  return Math.max(0, (1 - Math.cos(phase)) / 2);
+}
+
+export function WeatherSky({ weather, dayFactor = 1 }: { weather: Weather; dayFactor?: number }) {
+  const sky = useMemo(
+    () => lerpHexColor(NIGHT_COLORS[weather], SKY_COLORS[weather], dayFactor),
+    [weather, dayFactor]
+  );
   return (
     <>
-      <color attach="background" args={[SKY_COLORS[weather]]} />
-      <fog attach="fog" args={[SKY_COLORS[weather], FOG_NEAR[weather], FOG_FAR[weather]]} />
+      <color attach="background" args={[sky]} />
+      <fog attach="fog" args={[sky, FOG_NEAR[weather], FOG_FAR[weather]]} />
     </>
   );
 }
 
-export function WeatherLight({ weather }: { weather: Weather }) {
+export function WeatherLight({ weather, dayFactor = 1 }: { weather: Weather; dayFactor?: number }) {
   const lightRef = useRef<THREE.DirectionalLight>(null);
-  const baseIntensity =
+  const dayIntensity =
     weather === "sunny" ? 1.15 : weather === "rain" ? 0.55 : weather === "fog" ? 0.7 : 0.4;
-  const ambient =
+  const dayAmbient =
     weather === "sunny" ? 0.55 : weather === "rain" ? 0.45 : weather === "fog" ? 0.6 : 0.35;
-  const lightColor =
+  // Night reduces light heavily; moonlight gives a faint blue glow
+  const baseIntensity = THREE.MathUtils.lerp(0.15, dayIntensity, dayFactor);
+  const ambient = THREE.MathUtils.lerp(0.18, dayAmbient, dayFactor);
+  const dayColor =
     weather === "sunny" ? "#fff4d6" : weather === "rain" ? "#cfd8e3" : weather === "fog" ? "#e6ebef" : "#9aa6b8";
+  const lightColor = lerpHexColor("#5a6da8", dayColor, dayFactor);
+  const sunY = THREE.MathUtils.lerp(2, 10, dayFactor);
 
   // Storm lightning flashes
   useFrame((state) => {
     if (!lightRef.current) return;
     if (weather === "storm") {
-      // Random flash bursts
       const t = state.clock.elapsedTime;
       const flash = Math.sin(t * 7.3) > 0.985 ? 2.5 : Math.sin(t * 2.1) > 0.97 ? 1.6 : baseIntensity;
       lightRef.current.intensity = flash;
@@ -57,10 +89,10 @@ export function WeatherLight({ weather }: { weather: Weather }) {
   return (
     <>
       <ambientLight intensity={ambient} />
-      <hemisphereLight args={["#bcd9ff", "#3a5a3a", weather === "sunny" ? 0.45 : 0.3]} />
+      <hemisphereLight args={["#bcd9ff", "#3a5a3a", (weather === "sunny" ? 0.45 : 0.3) * (0.4 + 0.6 * dayFactor)]} />
       <directionalLight
         ref={lightRef}
-        position={[6, 10, 4]}
+        position={[6, sunY, 4]}
         intensity={baseIntensity}
         color={lightColor}
         castShadow
