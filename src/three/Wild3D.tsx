@@ -92,7 +92,7 @@ function Scene({
     }));
     entries.sort((a, b) => {
       const score = (e: typeof a) =>
-        (e.stage === "mature" ? 4 : e.stage === "ancient" ? 5 : e.stage === "sapling" ? 2 : 1) +
+        (e.stage === "mature" ? 4 : e.stage === "sapling" ? 2 : 1) +
         (e.mine ? 1 : 0);
       return score(b) - score(a);
     });
