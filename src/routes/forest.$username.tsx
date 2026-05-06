@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { toast } from "sonner";
 import { TREES, BIOMES, type Tile, type Biome, type TreeKind, computeStage, biomeForTile, defaultBiomeZones } from "@/lib/game";
-import { FRIEND_GIFT_AMOUNT, FRIEND_GIFT_DAILY_CAP, FRIEND_WATER_DAILY_CAP, todayUTC } from "@/lib/social";
+import { FRIEND_GIFT_AMOUNT, FRIEND_GIFT_DAILY_CAP, todayUTC } from "@/lib/social";
 import { useView3D, isWebGLAvailable } from "@/lib/view3d";
 import { useWeather } from "@/lib/weather";
 import { ErrorBoundary3D } from "@/three/ErrorBoundary3D";
