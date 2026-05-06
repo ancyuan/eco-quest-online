@@ -50,6 +50,33 @@ export type Database = {
         }
         Relationships: []
       }
+      forest_signs: {
+        Row: {
+          created_at: string
+          emoji: string
+          expires_at: string
+          host_id: string
+          id: string
+          sender_id: string
+        }
+        Insert: {
+          created_at?: string
+          emoji: string
+          expires_at?: string
+          host_id: string
+          id?: string
+          sender_id: string
+        }
+        Update: {
+          created_at?: string
+          emoji?: string
+          expires_at?: string
+          host_id?: string
+          id?: string
+          sender_id?: string
+        }
+        Relationships: []
+      }
       forest_states: {
         Row: {
           biome_zones: Json
@@ -227,6 +254,33 @@ export type Database = {
         }
         Relationships: []
       }
+      visit_log: {
+        Row: {
+          day: string
+          defend_count: number
+          host_id: string
+          id: string
+          last_visit_at: string
+          visitor_id: string
+        }
+        Insert: {
+          day?: string
+          defend_count?: number
+          host_id: string
+          id?: string
+          last_visit_at?: string
+          visitor_id: string
+        }
+        Update: {
+          day?: string
+          defend_count?: number
+          host_id?: string
+          id?: string
+          last_visit_at?: string
+          visitor_id?: string
+        }
+        Relationships: []
+      }
       weather_state: {
         Row: {
           duration_ms: number
@@ -283,7 +337,15 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      defend_friend_threat: {
+        Args: { _host_id: string; _tile_index: number }
+        Returns: Json
+      }
+      leave_forest_sign: {
+        Args: { _emoji: string; _host_id: string }
+        Returns: Json
+      }
+      water_friend_tree_boost: { Args: { _host_id: string }; Returns: Json }
     }
     Enums: {
       [_ in never]: never
