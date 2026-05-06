@@ -1,118 +1,132 @@
+# Rencana Pengembangan: Interaksi Antar Pemain — Forest Guardian
 
-# Rencana Pengembangan 3D Low-Poly — Forest Guardian
-
-Tujuan: ubah tampilan utama dari grid emoji 2D menjadi **forest 3D low-poly** yang ramah mobile, tetap mempertahankan seluruh gameplay loop (plant, grow, threat, harvest, ancient ritual, weather, companion, quest, social) yang sudah berjalan.
+Tujuan: memperluas dimensi sosial game dari fitur dasar yang sudah ada (friends list, visit forest, wild garden 20×20, friend gift/water) menjadi ekosistem multiplayer yang hidup — kooperatif, kompetitif ringan, dan komunal — tanpa merusak loop single-player yang sudah stabil.
 
 Prinsip:
-- **Tidak menghapus 2D** — render 3D adalah lapisan visual baru di atas state yang sama (`tiles[]`, `weather`, dst). Toggle 2D/3D di settings.
-- **Low-poly murni** — tanpa asset eksternal berat. Semua mesh dibuat prosedural (cone + cylinder + box) supaya bundle tetap kecil dan render cepat di HP.
-- **Bertahap** — tiap fase punya output yang langsung playable, tidak ada "big bang rewrite".
+- **Additive, bukan disruptif** — semua fitur baru opsional. Pemain solo tetap bisa main penuh.
+- **Server-authoritative** — semua aksi yang mempengaruhi pemain lain divalidasi via RLS / server functions, bukan client-side.
+- **Realtime-first** — gunakan Supabase Realtime channel yang sudah terpasang (`wild-changes`, `friendships-changes`) untuk update instan.
+- **Ramah anti-toxic** — opt-in untuk semua interaksi PvP-style, daily caps untuk gifting/sabotage, no chat bebas (hanya emote/preset).
 
-Stack pilihan: **react-three-fiber + drei + three** (ekosistem React, deklaratif, mature di mobile). Bundle ~200KB gzip — acceptable untuk game.
+Status saat ini (yang sudah ada):
+- `friendships` table + halaman `/friends` (add/accept/remove)
+- `friend_actions` table + daily caps untuk gift (5💧) & water (10×/hari)
+- `/forest/$username` visit read-only (2D & 3D)
+- `wild_garden` 20×20 shared grid dengan opt-in
+- `profiles` punya leaderboard fields (`oxygen`, `trees_saved`, `xp`, `level`)
+- `/leaderboard` route
 
 ---
 
-## Fase 3D-1 — Fondasi Scene & Grid (Playable Skeleton)
+## Fase S-1 — Visit Interaktif & Co-op Care
 
-Output: route `/play` punya tombol "Switch to 3D". Saat aktif, grid 2D diganti scene 3D yang menampilkan tile kosong + pohon yang sudah ditanam, dengan kamera orbit. Semua interaksi (plant, harvest) tetap jalan via klik tile 3D.
+Output: kunjungan ke hutan teman tidak lagi pasif. Pemain bisa membantu merawat hutan teman dan meninggalkan jejak.
 
 Pekerjaan:
-- Install `three`, `@react-three/fiber`, `@react-three/drei`.
-- `src/three/Scene.tsx` — Canvas + lighting (1 directional + ambient + hemisphere) + OrbitControls (terbatas, no roll, jarak min/max).
-- `src/three/Ground.tsx` — plane low-poly dengan warna per biom (rainforest/savanna/taiga). Subdivide untuk vertex displacement ringan agar tidak flat.
-- `src/three/Tile.tsx` — hex atau square tile (pakai square dulu, sesuai grid existing). Hover state = sedikit naik + outline. Click = panggil handler yang sama dengan versi 2D (`onTileClick(index)`).
-- `src/three/trees/` — 1 file per spesies (Oak, Pine, Sakura, Maple, Mangrove, Bamboo, Cherry, Eucalyptus). Tiap pohon = composition cone/cylinder/sphere prosedural, parameterized by `stage` (seed = nub kecil, sapling = small cone, mature = full, ancient = full + glow).
-- `src/three/Forest3D.tsx` — komponen utama yang menerima `tiles, gridSize, biomeZones` dan render array Tile + Tree.
-- Toggle: tambah field `view3d: boolean` di `usePreferences`. Tombol di header `/play`.
+- **Help Defend Threat**: saat visit hutan teman yang sedang kena 🔥/🪓/🐛, tombol "Help Defend" muncul di tile. Berhasil = teman dapat notifikasi + visitor dapat XP kecil + acorn. Daily cap 5/hari per visitor, max 3 per teman per hari.
+- **Water Friend's Tree**: kembangkan fitur water yang sudah ada — tile yang baru disiram dapat boost growth +20% sampai stage berikutnya. Visual: tile berkilau biru selama X menit.
+- **Leave a Sign**: emote stiker (🌸 / 🍂 / ⭐ / 💚 — 8 preset) yang muncul di hutan teman selama 24 jam. Cap 1 per teman per hari.
+- **Visit log**: teman lihat siapa yang berkunjung hari ini di pojok hutan ("3 friends visited today").
 
-Definisi selesai: bisa plant pohon di mode 3D, lihat stage berubah real-time, harvest dengan klik. Mode 2D masih default & tidak rusak.
+Tabel baru: `visit_log` (visitor_id, host_id, day, action_count) — untuk capping & display.
+
+Definisi selesai: visit jadi 2-arah; ada insentif untuk berkunjung; host merasa "diperhatikan".
 
 ---
 
-## Fase 3D-2 — Animasi, Threat & Weather Visual
+## Fase S-2 — Cooperative Quests & Guild/Grove
 
-Output: dunia 3D terasa "hidup" — pohon tumbuh dengan animasi, ancaman muncul sebagai mesh 3D di atas tile, cuaca mengubah skybox & particle.
+Output: pemain bisa membentuk kelompok kecil dan menyelesaikan quest bersama untuk reward yang lebih besar dari quest harian solo.
 
 Pekerjaan:
-- **Tree growth animation**: interpolasi scale & sway saat `stage` berubah (gunakan `useFrame` untuk subtle sway sin-wave; saat stage transition, lerp scale 0.3s).
-- **Ancient glow**: pohon ancient diberi `emissiveIntensity` pulsing + ring partikel kecil di pangkal.
-- **Threat visuals**:
-  - 🔥 Fire = particle cone merah/orange di atas tile + tile berkedip.
-  - 🪓 Logger = mesh kapak low-poly muncul, swing animation.
-  - 🐛 Pest = beberapa kubus kecil bergerak di sekitar pohon.
-  - Countdown ring (Torus) di sekitar tile menunjukkan `threatExpiresAt`.
-- **Weather**:
-  - ☀️ Cerah: skybox biru cerah, lighting hangat.
-  - 🌧️ Hujan: particle rain (instanced lines), darken ambient, ripple di ground shader sederhana.
-  - 🌫️ Kabut: `<Fog>` putih, jarak pendek.
-  - 🌪️ Badai: fog gelap + rain + occasional lightning (flash directional intensity).
-- **Companion 3D**: butterfly/owl/panda/deer sebagai mesh sederhana yang berkeliaran (random walk path) di atas grid. Reuse data dari `companions` state.
+- **Grove (mini-guild)**: max 8 member, dibuat oleh siapa saja (cost 50🌬️ O₂), nama + emoji icon. Tabel `groves` + `grove_members`.
+- **Grove board**: shared chat-board sederhana (posting preset message + 1 free-text 80 char, moderated client-side). Tabel `grove_posts`.
+- **Weekly Co-op Quest**: tiap Senin server-side cron generate 1 quest per grove (contoh: "Plant 100 sakura together", "Defend 50 threats di Wild Garden", "Harvest 500 O₂ kolektif"). Progress tracked real-time, reward dibagi rata.
+- **Grove level**: total kontribusi member = grove XP. Level naik = unlock cosmetic emblem untuk profil member.
 
-Definisi selesai: pemain bisa main full sesi di 3D dan secara visual semua event terlihat (plant, grow, threat spawn, defend, harvest, weather change, companion).
+Tabel baru: `groves`, `grove_members`, `grove_posts`, `grove_quests`, `grove_quest_progress`.
+Edge function: `weekly-grove-quest-generator` (pg_cron weekly).
+
+Definisi selesai: pemain punya "rumah sosial"; ada alasan untuk login bareng teman; reward kolektif > solo.
 
 ---
 
-## Fase 3D-3 — Polish, Performa & Mobile
+## Fase S-3 — Trading & Gifting Lanjutan
 
-Output: 3D mode siap jadi default — frame rate stabil di HP mid-range, kontrol intuitif di touch.
+Output: ekonomi antar pemain — pohon, seed, dan cosmetic bisa dipertukarkan.
 
 Pekerjaan:
-- **Instanced meshes**: pohon dengan stage sama di-render via `<Instances>` drei untuk hemat draw call (penting untuk grid 10×10 = 100 tile).
-- **LOD sederhana**: ancient tree pakai mesh detail tinggi, mature pakai medium, sapling/seed pakai sprite billboard.
-- **Mobile controls**:
-  - Single tap = select/plant/harvest tile.
-  - Two-finger drag = orbit kamera.
-  - Pinch = zoom (clamp).
-  - Disable `OrbitControls` damping di low-end device.
-- **Adaptive quality**: deteksi `devicePixelRatio` & FPS via `PerformanceMonitor` drei. Auto-degrade: matikan rain particles, kurangi shadow map size, switch ke `flat` shading.
-- **Loading state**: Suspense fallback dengan progress sederhana (canvas masih cold-start ~300ms).
-- **A11y / fallback**: jika `navigator.gpu`/WebGL2 tidak tersedia atau Canvas error → auto-fallback ke 2D + toast "3D tidak tersedia di device ini".
-- **Settings panel**: slider quality (Low/Med/High), toggle shadows, toggle particles.
+- **Seed Gifting**: kirim 1 seed (jenis pohon yang sudah unlock) ke teman, cost 10💧. Cap 3/hari ke teman berbeda. Penerima dapat di inbox.
+- **Inbox sistem**: route `/inbox` — list gift pending, klik claim. Tabel `gifts` (sender_id, recipient_id, kind, payload_jsonb, status, created_at, claimed_at).
+- **Trade request 1:1**: usulan tukar (2 seed ↔ 2 seed, atau seed ↔ acorn). Both sides confirm sebelum dieksekusi (atomic via RPC `execute_trade`). Cooldown 1 jam antar trade dengan teman yang sama.
+- **Acorn marketplace (passive)**: listing publik 24h — "5 sakura seed seharga 30 acorn". Browse di `/market`. Anti-bot: cap 3 listing aktif per pemain.
 
-Definisi selesai: tested di Chrome desktop + Safari iOS + Chrome Android mid-range, ≥30 FPS di grid 10×10.
+Tabel baru: `gifts`, `trades`, `trade_offers`, `market_listings`.
+Catatan keamanan: semua mutasi inventory via RPC `security definer` — RLS reject direct UPDATE pada `unlocked_trees` / `acorns` dari client.
+
+Definisi selesai: ada gameplay loop "kumpulkan & tukar" yang melibatkan pemain lain.
 
 ---
 
-## Fase 3D-4 — Konten Visual Lanjutan (Optional / Long-tail)
+## Fase S-4 — Kompetisi Sehat & Event Komunal
 
-Hanya dikerjakan setelah 3D-1..3 stabil dan user feedback positif.
+Output: ada momen high-energy berkala yang menyatukan semua pemain.
 
-- **Day/Night cycle** sinkron dengan jam server (ground & sky lerp warna).
-- **Skin pohon** (untuk Fase 7 cosmetic shop): variant material per skin (golden, neon, crystal) — tinggal swap material di komponen tree.
-- **Visit forest teman dalam 3D**: route `/forest/$username` ikut switch ke 3D mode (read-only camera).
-- **Wild Garden 3D**: grid 20×20 — perlu instancing agresif + frustum culling.
-- **Confetti 3D**: ganti `<Confetti />` 2D dengan particle 3D saat unlock achievement / harvest besar.
-- **Mini cinematic**: saat ancient ritual selesai, kamera auto-zoom + slow pan + glow sweep selama 2 detik.
+Pekerjaan:
+- **Weekly Leaderboard tab**: split leaderboard global jadi tab All-Time / This Week / Friends. Reset Senin 00:00 UTC. Top 10 weekly dapat badge profil.
+- **Seasonal Event** (4 minggu sekali): tema (e.g. "Sakura Bloom Festival" — semua sakura tumbuh 2× cepat & yield O₂ 1.5×). Spawn objektif komunal: "Komunitas tanam 10.000 sakura → unlock skin emas untuk semua".
+  - Tabel `events` + `event_progress` (global counter).
+  - Banner di header `/play` selama event aktif.
+- **World Boss (opsional)**: wildfire raksasa di Wild Garden tiap Sabtu malam, butuh 50 pemain online untuk padamkan dalam 30 menit. Reward acorn besar.
+- **Photo Mode share**: snapshot 3D forest jadi PNG (via three.js `gl.toDataURL`), share link publik `/snap/$id`. Tabel `forest_snapshots`.
+
+Definisi selesai: ada "alasan untuk login Sabtu malam"; komunitas terasa hidup.
 
 ---
 
-## Catatan teknis (untuk implementasi nanti)
+## Fase S-5 — Moderasi, Anti-Abuse & Polish
 
-- **SSR**: R3F harus di-render client-only. Bungkus `<Forest3D>` dengan dynamic check `typeof window !== 'undefined'` atau gunakan `useEffect`-mounted state. Route file tetap SSR-able untuk SEO header.
-- **Bundle splitting**: import three/r3f via `React.lazy` di dalam `/play` agar landing page tidak ikut menanggung 200KB.
-- **State source of truth tetap `tiles[]` di play.tsx** — komponen 3D adalah pure renderer + emit events. Tidak ada duplikasi state, tidak ada konflik dengan logika quest/social yang sudah ada.
-- **Tidak ada perubahan database / migration** yang diperlukan untuk seluruh roadmap 3D ini. Hanya satu kolom preference baru (`view3d`) yang disimpan lokal via `usePreferences` (sudah ada infrastrukturnya).
-- **Dependency baru** (~tambahan ke `package.json`):
-  - `three` (~150KB gz)
-  - `@react-three/fiber` (~30KB gz)
-  - `@react-three/drei` (tree-shakeable, ambil hanya `OrbitControls`, `Instances`, `PerformanceMonitor`, `Sky`, `Cloud`)
+Output: sistem sosial tahan terhadap penyalahgunaan dan tetap menyenangkan.
+
+Pekerjaan:
+- **Block list**: blokir pemain → tidak bisa visit, gift, atau lihat di leaderboard friends. Tabel `blocks`.
+- **Report**: lapor grove post / username / snapshot. Tabel `reports`. Auto-hide setelah 3 report unik (review manual via admin role).
+- **Rate limiter global**: edge middleware — max 60 social-write actions per pemain per menit.
+- **Admin role**: gunakan pattern `user_roles` + enum `app_role` (admin/moderator/user) sesuai best practice. Halaman `/admin/reports` (gated by `has_role`).
+- **Privacy toggle**: profile bisa di-set "private" — hanya friends bisa visit, leaderboard tetap muncul tapi tanpa link.
+- **Notifications center** (`/notifications`): konsolidasi semua event sosial (gift diterima, friend request, grove quest selesai, defended threat), badge counter di header.
+
+Tabel baru: `blocks`, `reports`, `user_roles`, `notifications`.
+
+Definisi selesai: pemain merasa aman; moderator punya tools; nothing falls through the cracks.
 
 ---
 
 ## Urutan rekomendasi eksekusi
 
-| Prioritas | Fase | Estimasi scope |
-|-----------|------|----------------|
-| 🔥 Mulai dulu | **3D-1** Skeleton scene + tile + 8 species procedural | Batch besar, 1 sesi |
-| 🔥 Berikutnya | **3D-2** Animasi + threat + weather visual | Batch besar, 1 sesi |
-| 🟡 Setelah feedback | **3D-3** Performa + mobile + fallback | Batch sedang |
-| 🟢 Long-tail | **3D-4** Day/night, skin, wild garden 3D | On-demand |
+| Prioritas | Fase | Estimasi |
+|-----------|------|----------|
+| Mulai dulu | **S-1** Visit interaktif & co-op care | 1 sesi |
+| Berikutnya | **S-2** Grove + co-op weekly quest | 1-2 sesi |
+| Mid-game | **S-3** Trading & gifting | 1-2 sesi |
+| Endgame | **S-4** Kompetisi & event komunal | 1-2 sesi |
+| Polish | **S-5** Moderasi & anti-abuse | 1 sesi |
+
+---
+
+## Catatan teknis (untuk implementasi nanti)
+
+- **Realtime channels**: tambah channel per fitur — `notifications:${user.id}`, `grove:${grove_id}`, `event:global`.
+- **Server functions**: gunakan pattern `createServerFn` + `requireSupabaseAuth` untuk semua aksi yang mengubah state pemain lain (defend, gift claim, trade execute). Jangan andalkan RLS saja untuk logika multi-tabel atomic.
+- **RPC atomic**: trade & gift claim wajib `security definer` SQL function untuk mencegah race condition.
+- **pg_cron**: dipakai untuk weekly leaderboard reset, weekly grove quest gen, seasonal event start/stop. Endpoint cron via `/api/public/cron/*` dengan signature verification.
+- **Indexing**: tambah index pada `friend_actions(actor_id, day)`, `visit_log(host_id, day)`, `gifts(recipient_id, status)`, `notifications(user_id, read_at)`.
+- **Tidak ada perubahan ke fitur 3D / single-player** — semua fase ini paralel dengan roadmap 3D-4 (long-tail) yang sudah selesai.
 
 ---
 
 ## Pertanyaan sebelum mulai
 
-1. **Style art**: full low-poly geometric (cone/cube — paling cepat, "Monument Valley" vibe) **atau** soft low-poly (rounded edges, gradient — butuh lebih banyak vertex tapi lebih lembut)?
-2. **Default view setelah 3D-3 selesai**: 3D jadi default, atau 2D tetap default & 3D opt-in?
-3. **Kamera**: free-orbit (player bisa putar bebas) atau fixed isometric (lebih sederhana, lebih konsisten visual)?
-4. **Mulai dari Fase 3D-1 sekarang**?
+1. **PvP toleransi**: pertahankan Wild Garden uproot lawan, atau buang elemen sabotase sepenuhnya & fokus murni co-op?
+2. **Chat**: tetap preset emote saja (aman), atau buka free-text di Grove board (butuh moderation lebih)?
+3. **Mulai dari Fase S-1 sekarang**, atau gabungkan S-1 + S-2 jadi 1 batch besar?
