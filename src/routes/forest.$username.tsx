@@ -46,6 +46,13 @@ function VisitPage() {
   const [giftUsed, setGiftUsed] = useState(0);
   const [busy, setBusy] = useState(false);
   const [now, setNow] = useState(() => Date.now());
+  const [signs, setSigns] = useState<{ id: string; emoji: string; sender_id: string; created_at: string }[]>([]);
+  const [visitorsToday, setVisitorsToday] = useState(0);
+  const [defendUsedHere, setDefendUsedHere] = useState(0);
+  const [signedHere, setSignedHere] = useState(false);
+  const [showSignPicker, setShowSignPicker] = useState(false);
+
+  const SIGN_EMOJIS = ["🌸","🍂","⭐","💚","🌟","🍃","🌻","🌈"] as const;
 
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 2000);
@@ -90,6 +97,33 @@ function VisitPage() {
         setWaterUsed(water.filter(a => a.target_id === prof.id).length);
         // gift cap is across all targets
         setGiftUsed(gift.length + (gift.some(a => a.target_id === prof.id) ? 0 : 0));
+
+        // active signs on this host
+        const { data: signRows } = await supabase
+          .from("forest_signs")
+          .select("id, emoji, sender_id, created_at")
+          .eq("host_id", prof.id)
+          .gte("created_at", new Date(Date.now() - 24 * 3600 * 1000).toISOString())
+          .order("created_at", { ascending: false });
+        setSigns(signRows ?? []);
+        setSignedHere((signRows ?? []).some(s => s.sender_id === user.id));
+
+        // visitor stats today
+        const today = todayUTC();
+        const { data: vlogHost } = await supabase
+          .from("visit_log")
+          .select("visitor_id")
+          .eq("host_id", prof.id)
+          .eq("day", today);
+        setVisitorsToday(new Set((vlogHost ?? []).map(v => v.visitor_id)).size);
+        const { data: vlogMine } = await supabase
+          .from("visit_log")
+          .select("defend_count")
+          .eq("visitor_id", user.id)
+          .eq("host_id", prof.id)
+          .eq("day", today)
+          .maybeSingle();
+        setDefendUsedHere(vlogMine?.defend_count ?? 0);
       }
       setLoading(false);
     })();
@@ -100,30 +134,48 @@ function VisitPage() {
     if (user.id === target.id) { toast.info("Pohon sendiri sudah cukup berisi cinta 🌳"); return; }
     if (waterUsed >= 1) { toast.info("Sudah disiram hari ini"); return; }
     setBusy(true);
-    const { error } = await supabase.from("friend_actions")
-      .insert({ actor_id: user.id, target_id: target.id, kind: "water" });
+    const { data, error } = await supabase.rpc("water_friend_tree_boost", { _host_id: target.id });
     if (error) { toast.error(error.message); setBusy(false); return; }
-    // boost: bring planted_at earlier on first non-mature tile (visible help)
-    const idx = tiles.findIndex(t => t.kind && t.stage !== "mature" && t.stage !== "ancient");
-    if (idx >= 0) {
-      const updated = [...tiles];
-      updated[idx] = { ...updated[idx], plantedAt: (updated[idx].plantedAt ?? Date.now()) - 30_000 };
-      // persist to target's forest
-      const stripped = updated.filter(t => t.kind).map(t => ({
-        index: t.index, kind: t.kind, stage: t.stage, plantedAt: t.plantedAt,
-        threat: t.threat, threatExpiresAt: t.threatExpiresAt,
-      }));
-      // RLS prevents writing to other people's forest. Boost is symbolic — we still award XP via xp bump on self.
-      void stripped;
-      setTiles(updated);
-    }
-    // give actor +5 XP
-    const { data: meProf } = await supabase.from("profiles").select("xp").eq("id", user.id).maybeSingle();
-    if (meProf) {
-      await supabase.from("profiles").update({ xp: (meProf.xp ?? 0) + 5 }).eq("id", user.id);
+    const res = data as { ok: boolean; error?: string; tile_boosted?: number };
+    if (!res?.ok) { toast.info(res?.error ?? "Gagal"); setBusy(false); return; }
+    if (typeof res.tile_boosted === "number") {
+      setTiles(prev => prev.map(t =>
+        t.index === res.tile_boosted ? { ...t, plantedAt: (t.plantedAt ?? Date.now()) - 30_000 } : t
+      ));
     }
     setWaterUsed(w => w + 1);
-    toast.success(`💧 Kamu menyiram forest ${target.display_name}! +5 XP`);
+    toast.success(`💧 Pohon ${target.display_name} tumbuh lebih cepat! +5 XP`);
+    setBusy(false);
+  };
+
+  const handleDefend = async (tileIndex: number) => {
+    if (!user || !target || busy) return;
+    setBusy(true);
+    const { data, error } = await supabase.rpc("defend_friend_threat", {
+      _host_id: target.id, _tile_index: tileIndex,
+    });
+    if (error) { toast.error(error.message); setBusy(false); return; }
+    const res = data as { ok: boolean; error?: string; xp?: number; acorns?: number };
+    if (!res?.ok) { toast.info(res?.error ?? "Gagal"); setBusy(false); return; }
+    setTiles(prev => prev.map(t =>
+      t.index === tileIndex ? { ...t, threat: undefined, threatExpiresAt: undefined } : t
+    ));
+    setDefendUsedHere(c => c + 1);
+    toast.success(`🛡️ Ancaman dipadamkan! +${res.xp ?? 10} XP, +${res.acorns ?? 1}🌰`);
+    setBusy(false);
+  };
+
+  const handleLeaveSign = async (emoji: string) => {
+    if (!user || !target || busy) return;
+    setBusy(true);
+    setShowSignPicker(false);
+    const { data, error } = await supabase.rpc("leave_forest_sign", { _host_id: target.id, _emoji: emoji });
+    if (error) { toast.error(error.message); setBusy(false); return; }
+    const res = data as { ok: boolean; error?: string };
+    if (!res?.ok) { toast.info(res?.error ?? "Gagal"); setBusy(false); return; }
+    setSignedHere(true);
+    setSigns(prev => [{ id: crypto.randomUUID(), emoji, sender_id: user.id, created_at: new Date().toISOString() }, ...prev]);
+    toast.success(`${emoji} ditinggalkan di hutan ${target.display_name}`);
     setBusy(false);
   };
 
@@ -161,6 +213,8 @@ function VisitPage() {
   }
 
   const isOwn = user?.id === target.id;
+  const defendCapHere = 3;
+  const remainingDefend = Math.max(0, defendCapHere - defendUsedHere);
 
   return (
     <main className="min-h-[calc(100vh-3.5rem)] bg-background px-4 py-8">
@@ -196,10 +250,52 @@ function VisitPage() {
               >
                 🎁 Gift {FRIEND_GIFT_AMOUNT}💧 ({FRIEND_GIFT_DAILY_CAP - giftUsed} left)
               </button>
+              <button
+                onClick={() => setShowSignPicker(s => !s)}
+                disabled={busy || signedHere}
+                className="rounded-lg bg-pink-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50"
+                title={signedHere ? "Sudah meninggalkan tanda hari ini" : "Tinggalkan emoji 24 jam"}
+              >
+                🌸 Sign
+              </button>
               </>
             )}
           </div>
         </div>
+
+        {showSignPicker && !isOwn && (
+          <div className="mb-3 flex flex-wrap gap-2 rounded-lg border border-border bg-card p-3">
+            {SIGN_EMOJIS.map(e => (
+              <button
+                key={e}
+                onClick={() => handleLeaveSign(e)}
+                disabled={busy}
+                className="rounded-md bg-secondary px-3 py-2 text-lg hover:bg-secondary/70 disabled:opacity-50"
+              >
+                {e}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {(signs.length > 0 || visitorsToday > 0) && (
+          <div className="mb-3 flex flex-wrap items-center gap-3 rounded-lg border border-border bg-card/60 px-3 py-2 text-xs">
+            {visitorsToday > 0 && (
+              <span className="text-muted-foreground">👥 {visitorsToday} pengunjung hari ini</span>
+            )}
+            {signs.length > 0 && (
+              <span className="flex items-center gap-1">
+                <span className="text-muted-foreground">Signs:</span>
+                {signs.slice(0, 12).map(s => (
+                  <span key={s.id} className="text-base" title={new Date(s.created_at).toLocaleString()}>{s.emoji}</span>
+                ))}
+              </span>
+            )}
+            {!isOwn && (
+              <span className="ml-auto text-muted-foreground">🛡️ Defend: {remainingDefend}/{defendCapHere} sisa</span>
+            )}
+          </div>
+        )}
 
         {use3D ? (
           <ErrorBoundary3D onError={() => { view3d.setEnabled(false); toast.error("3D crashed, kembali ke 2D"); }}>
@@ -235,23 +331,28 @@ function VisitPage() {
               const stage = computeStage(t.plantedAt, now, t.kind as TreeKind, isAncient);
               emoji = TREES[t.kind as TreeKind].emoji[stage];
             }
+            const canDefend = !isOwn && !!user && !!t?.threat && remainingDefend > 0;
             return (
-              <div
+              <button
                 key={i}
+                type="button"
+                onClick={() => canDefend && handleDefend(i)}
+                disabled={!canDefend || busy}
                 title={`${BIOMES[biome].label}${t?.kind ? " — " + TREES[t.kind as TreeKind].label : ""}`}
-                className={`aspect-square grid place-items-center rounded-md text-xl ${BIOMES[biome].bg}`}
+                className={`relative aspect-square grid place-items-center rounded-md text-xl ${BIOMES[biome].bg} ${canDefend ? "ring-2 ring-orange-500 hover:ring-4 cursor-pointer animate-pulse" : "cursor-default"} disabled:cursor-default`}
               >
                 {emoji}
-                {t?.threat && <span className="absolute text-xs">⚠️</span>}
-              </div>
+                {t?.threat && <span className="absolute -top-1 -right-1 text-xs">⚠️</span>}
+              </button>
             );
           })}
         </div>
         )}
 
         <p className="mt-3 text-center text-xs text-muted-foreground">
-          Read-only. Water memberimu +5 XP per teman/hari. Gift mengirim {FRIEND_GIFT_AMOUNT} energy
-          (sampai {FRIEND_WATER_DAILY_CAP - waterUsed} water atau {FRIEND_GIFT_DAILY_CAP} gift / hari total).
+          💧 Water mempercepat pertumbuhan pohon teman (+5 XP, 1×/teman/hari).
+          🛡️ Klik tile dengan ⚠️ untuk membantu memadamkan ancaman (5×/hari, max 3/teman, +10 XP +1🌰).
+          🌸 Sign meninggalkan emoji 24 jam (1×/teman/hari). Cap gift: {FRIEND_GIFT_DAILY_CAP}/hari.
         </p>
       </div>
     </main>
