@@ -123,6 +123,13 @@ function SiteHeader() {
                 Wild
               </Link>
               <Link
+                to="/grove"
+                className="rounded-md px-3 py-1.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                activeProps={{ className: "rounded-md px-3 py-1.5 bg-secondary text-foreground font-medium" }}
+              >
+                Grove
+              </Link>
+              <Link
                 to="/profile"
                 className="rounded-md px-3 py-1.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
                 activeProps={{ className: "rounded-md px-3 py-1.5 bg-secondary text-foreground font-medium" }}
