@@ -35,6 +35,7 @@ import {
 } from "@/lib/quests";
 import { useView3D, isWebGLAvailable } from "@/lib/view3d";
 import { ErrorBoundary3D } from "@/three/ErrorBoundary3D";
+import { contributeToGroveQuest } from "@/lib/grove";
 
 // Lazy-load 3D scene so the ~200KB three.js bundle isn't pulled into the initial /play chunk
 const Forest3D = lazy(() => import("@/three/Forest3D"));
