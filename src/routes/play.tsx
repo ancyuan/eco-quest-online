@@ -434,6 +434,7 @@ function PlayPage() {
           setTreesSaved(s => s + 1);
           setXp(x => x + XP_DEFEND);
           emitQuestEvent({ type: "defend" });
+          contributeToGroveQuest("defend_threats", 1);
           toast.success("🛡️ Auto-defend triggered");
           return prev.map((t, i) => i === idx ? { ...t, threat: undefined, threatExpiresAt: undefined } : t);
         });
