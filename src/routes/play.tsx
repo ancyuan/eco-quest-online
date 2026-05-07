@@ -564,6 +564,7 @@ function PlayPage() {
       setTreesSaved(s => s + 1);
       setXp(x => x + XP_DEFEND);
       emitQuestEvent({ type: "defend" });
+      contributeToGroveQuest("defend_threats", 1);
       toast.success(`Saved your tree from ${THREATS[tile.threat].label.toLowerCase()}!`);
       return;
     }
@@ -584,6 +585,7 @@ function PlayPage() {
       const harvestedKind = tile.kind;
       setHarvestTally(prev => bumpTally(prev, harvestedKind, 1));
       emitQuestEvent({ type: "harvest", kind: harvestedKind, biome, isAncient, oxygen: gain });
+      contributeToGroveQuest("harvest_o2", gain);
       setAnimatingTiles(a => ({ ...a, [tile.index]: "harvest" }));
       setConfettiTrigger(Date.now());
       setTimeout(() => setAnimatingTiles(a => { const { [tile.index]: _, ...r } = a; return r; }), 400);
@@ -608,6 +610,7 @@ function PlayPage() {
       setXp(x => x + XP_PLANT);
       speciesPlantedRef.current.add(selectedKind);
       emitQuestEvent({ type: "plant", kind: selectedKind, biome });
+      contributeToGroveQuest("plant_trees", 1);
       setAnimatingTiles(a => ({ ...a, [tile.index]: "pop" }));
       setTimeout(() => setAnimatingTiles(a => { const { [tile.index]: _, ...r } = a; return r; }), 350);
       setTiles(prev => prev.map(t =>
