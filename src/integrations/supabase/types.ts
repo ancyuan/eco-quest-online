@@ -161,6 +161,156 @@ export type Database = {
         }
         Relationships: []
       }
+      grove_members: {
+        Row: {
+          contribution: number
+          grove_id: string
+          joined_at: string
+          user_id: string
+        }
+        Insert: {
+          contribution?: number
+          grove_id: string
+          joined_at?: string
+          user_id: string
+        }
+        Update: {
+          contribution?: number
+          grove_id?: string
+          joined_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "grove_members_grove_id_fkey"
+            columns: ["grove_id"]
+            isOneToOne: false
+            referencedRelation: "groves"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      grove_posts: {
+        Row: {
+          author_id: string
+          content: string
+          created_at: string
+          grove_id: string
+          id: string
+          kind: string
+        }
+        Insert: {
+          author_id: string
+          content: string
+          created_at?: string
+          grove_id: string
+          id?: string
+          kind: string
+        }
+        Update: {
+          author_id?: string
+          content?: string
+          created_at?: string
+          grove_id?: string
+          id?: string
+          kind?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "grove_posts_grove_id_fkey"
+            columns: ["grove_id"]
+            isOneToOne: false
+            referencedRelation: "groves"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      grove_quests: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          grove_id: string
+          id: string
+          kind: string
+          label: string
+          progress: number
+          reward_acorns: number
+          reward_xp: number
+          target: number
+          week_start: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          grove_id: string
+          id?: string
+          kind: string
+          label: string
+          progress?: number
+          reward_acorns?: number
+          reward_xp?: number
+          target: number
+          week_start: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          grove_id?: string
+          id?: string
+          kind?: string
+          label?: string
+          progress?: number
+          reward_acorns?: number
+          reward_xp?: number
+          target?: number
+          week_start?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "grove_quests_grove_id_fkey"
+            columns: ["grove_id"]
+            isOneToOne: false
+            referencedRelation: "groves"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      groves: {
+        Row: {
+          created_at: string
+          emoji: string
+          id: string
+          level: number
+          member_count: number
+          name: string
+          owner_id: string
+          updated_at: string
+          xp: number
+        }
+        Insert: {
+          created_at?: string
+          emoji?: string
+          id?: string
+          level?: number
+          member_count?: number
+          name: string
+          owner_id: string
+          updated_at?: string
+          xp?: number
+        }
+        Update: {
+          created_at?: string
+          emoji?: string
+          id?: string
+          level?: number
+          member_count?: number
+          name?: string
+          owner_id?: string
+          updated_at?: string
+          xp?: number
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           achievements: string[]
@@ -337,12 +487,29 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      contribute_grove_quest: {
+        Args: { _amount: number; _kind: string }
+        Returns: Json
+      }
+      create_grove: { Args: { _emoji: string; _name: string }; Returns: Json }
       defend_friend_threat: {
         Args: { _host_id: string; _tile_index: number }
         Returns: Json
       }
+      ensure_weekly_quest: { Args: { _grove: string }; Returns: Json }
+      is_grove_member: {
+        Args: { _grove: string; _user: string }
+        Returns: boolean
+      }
+      iso_week_start: { Args: { _d: string }; Returns: string }
+      join_grove: { Args: { _grove: string }; Returns: Json }
       leave_forest_sign: {
         Args: { _emoji: string; _host_id: string }
+        Returns: Json
+      }
+      leave_grove: { Args: { _grove: string }; Returns: Json }
+      post_grove_message: {
+        Args: { _content: string; _grove: string; _kind: string }
         Returns: Json
       }
       water_friend_tree_boost: { Args: { _host_id: string }; Returns: Json }
