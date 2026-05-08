@@ -5,6 +5,7 @@ import { useAuth } from "@/lib/auth";
 import { toast } from "sonner";
 import { disconnectWallet } from "@/lib/wallet";
 import { usePreferences } from "@/lib/preferences";
+import { TREES } from "@/lib/game";
 
 export const Route = createFileRoute("/profile")({
   head: () => ({
@@ -25,6 +26,17 @@ interface Profile {
   skill_points?: number;
 }
 
+interface Memorial {
+  id: string;
+  name: string;
+  kind: string;
+  birth_at: string;
+  died_at: string;
+  cause: string;
+  threats_survived: number;
+  o2_produced: number;
+}
+
 function ProfilePage() {
   const { user, loading, signOut } = useAuth();
   const navigate = useNavigate();
@@ -34,6 +46,7 @@ function ProfilePage() {
   const [saving, setSaving] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
   const [resetting, setResetting] = useState(false);
+  const [memorials, setMemorials] = useState<Memorial[]>([]);
 
   const walletAddress = (user?.user_metadata?.wallet_address as string | undefined) ?? null;
   const isWalletUser = !!walletAddress;
@@ -55,6 +68,13 @@ function ProfilePage() {
           setName(data.display_name);
         }
       });
+    supabase
+      .from("tree_memorials")
+      .select("id, name, kind, birth_at, died_at, cause, threats_survived, o2_produced")
+      .eq("user_id", user.id)
+      .order("died_at", { ascending: false })
+      .limit(10)
+      .then(({ data }) => { if (data) setMemorials(data as Memorial[]); });
   }, [user]);
 
   const handleSave = async () => {
@@ -169,6 +189,41 @@ function ProfilePage() {
               checked={prefs.notifications_enabled}
               onChange={(v) => updatePrefs({ notifications_enabled: v })}
             />
+            <PrefRow
+              label="🔇 Mute all audio"
+              hint="Silence ambient + sound effects"
+              checked={prefs.audio_muted}
+              onChange={(v) => updatePrefs({ audio_muted: v })}
+            />
+            <SliderRow
+              label="🎵 Music volume"
+              value={prefs.audio_music}
+              onChange={(v) => updatePrefs({ audio_music: v })}
+            />
+            <SliderRow
+              label="🔊 Sound effects"
+              value={prefs.audio_sfx}
+              onChange={(v) => updatePrefs({ audio_sfx: v })}
+            />
+            <div className="rounded-lg border border-border bg-secondary/30 px-3 py-2">
+              <div className="text-sm font-medium text-foreground">🌐 Language</div>
+              <div className="text-xs text-muted-foreground">For daily haiku & weekly recap</div>
+              <div className="mt-2 flex gap-2">
+                {(["id","en"] as const).map((l) => (
+                  <button
+                    key={l}
+                    onClick={() => updatePrefs({ language: l })}
+                    className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${
+                      prefs.language === l
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-background text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {l === "id" ? "Bahasa Indonesia" : "English"}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
 
           <div className="mt-6 border-t border-border pt-4">
@@ -180,6 +235,31 @@ function ProfilePage() {
               {resetting ? "Resetting…" : "🔁 Reset forest"}
             </button>
           </div>
+
+          {memorials.length > 0 && (
+            <div className="mt-6 border-t border-border pt-4">
+              <h3 className="mb-2 text-sm font-semibold text-foreground">🪦 Memorial</h3>
+              <ul className="space-y-2">
+                {memorials.map((m) => {
+                  const def = TREES[m.kind as keyof typeof TREES];
+                  const lifespan = new Date(m.died_at).getTime() - new Date(m.birth_at).getTime();
+                  const days = Math.max(0, Math.floor(lifespan / 86_400_000));
+                  const hours = Math.floor((lifespan % 86_400_000) / 3_600_000);
+                  return (
+                    <li key={m.id} className="flex items-center gap-3 rounded-lg border border-border bg-secondary/30 px-3 py-2">
+                      <div className="text-2xl">{def?.emoji.mature ?? "🌳"}</div>
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-sm font-medium text-foreground">{m.name}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {def?.label ?? m.kind} · {days}h {hours}j · selamat {m.threats_survived}× · {m.o2_produced} O₂
+                        </div>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
 
           <div className="mt-6 border-t border-border pt-4">
             {isWalletUser ? (
@@ -239,5 +319,33 @@ function PrefRow({
         onChange={(e) => onChange(e.target.checked)}
       />
     </label>
+  );
+}
+
+function SliderRow({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  onChange: (v: number) => void;
+}) {
+  return (
+    <div className="rounded-lg border border-border bg-secondary/30 px-3 py-2">
+      <div className="flex items-center justify-between">
+        <div className="text-sm font-medium text-foreground">{label}</div>
+        <div className="text-xs tabular-nums text-muted-foreground">{value}%</div>
+      </div>
+      <input
+        type="range"
+        min={0}
+        max={100}
+        step={5}
+        value={value}
+        onChange={(e) => onChange(parseInt(e.target.value, 10))}
+        className="mt-1 w-full accent-[var(--color-primary)]"
+      />
+    </div>
   );
 }

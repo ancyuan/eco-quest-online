@@ -14,6 +14,36 @@ export type Database = {
   }
   public: {
     Tables: {
+      daily_haikus: {
+        Row: {
+          context: Json
+          created_at: string
+          day: string
+          id: string
+          language: string
+          text: string
+          user_id: string
+        }
+        Insert: {
+          context?: Json
+          created_at?: string
+          day: string
+          id?: string
+          language?: string
+          text: string
+          user_id: string
+        }
+        Update: {
+          context?: Json
+          created_at?: string
+          day?: string
+          id?: string
+          language?: string
+          text?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       forest_encyclopedia: {
         Row: {
           created_at: string
@@ -316,6 +346,9 @@ export type Database = {
           achievements: string[]
           acorns: number
           active_companions: string[]
+          audio_music: number
+          audio_muted: boolean
+          audio_sfx: number
           auto_harvest: boolean
           created_at: string
           daily_quests: Json
@@ -323,6 +356,9 @@ export type Database = {
           display_name: string
           harvest_tally: Json
           id: string
+          language: string
+          last_haiku_day: string | null
+          last_recap_week: string | null
           level: number
           notifications_enabled: boolean
           oxygen: number
@@ -346,6 +382,9 @@ export type Database = {
           achievements?: string[]
           acorns?: number
           active_companions?: string[]
+          audio_music?: number
+          audio_muted?: boolean
+          audio_sfx?: number
           auto_harvest?: boolean
           created_at?: string
           daily_quests?: Json
@@ -353,6 +392,9 @@ export type Database = {
           display_name?: string
           harvest_tally?: Json
           id: string
+          language?: string
+          last_haiku_day?: string | null
+          last_recap_week?: string | null
           level?: number
           notifications_enabled?: boolean
           oxygen?: number
@@ -376,6 +418,9 @@ export type Database = {
           achievements?: string[]
           acorns?: number
           active_companions?: string[]
+          audio_music?: number
+          audio_muted?: boolean
+          audio_sfx?: number
           auto_harvest?: boolean
           created_at?: string
           daily_quests?: Json
@@ -383,6 +428,9 @@ export type Database = {
           display_name?: string
           harvest_tally?: Json
           id?: string
+          language?: string
+          last_haiku_day?: string | null
+          last_recap_week?: string | null
           level?: number
           notifications_enabled?: boolean
           oxygen?: number
@@ -401,6 +449,48 @@ export type Database = {
           username?: string | null
           wild_garden_optin?: boolean
           xp?: number
+        }
+        Relationships: []
+      }
+      tree_memorials: {
+        Row: {
+          birth_at: string
+          cause: string
+          created_at: string
+          died_at: string
+          id: string
+          kind: string
+          name: string
+          o2_produced: number
+          threats_survived: number
+          tile_index: number | null
+          user_id: string
+        }
+        Insert: {
+          birth_at: string
+          cause?: string
+          created_at?: string
+          died_at?: string
+          id?: string
+          kind: string
+          name: string
+          o2_produced?: number
+          threats_survived?: number
+          tile_index?: number | null
+          user_id: string
+        }
+        Update: {
+          birth_at?: string
+          cause?: string
+          created_at?: string
+          died_at?: string
+          id?: string
+          kind?: string
+          name?: string
+          o2_produced?: number
+          threats_survived?: number
+          tile_index?: number | null
+          user_id?: string
         }
         Relationships: []
       }
@@ -452,6 +542,36 @@ export type Database = {
           started_at?: string
           updated_at?: string
           weather?: string
+        }
+        Relationships: []
+      }
+      weekly_recaps: {
+        Row: {
+          created_at: string
+          id: string
+          language: string
+          stats: Json
+          text: string
+          user_id: string
+          week_start: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          language?: string
+          stats?: Json
+          text: string
+          user_id: string
+          week_start: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          language?: string
+          stats?: Json
+          text?: string
+          user_id?: string
+          week_start?: string
         }
         Relationships: []
       }

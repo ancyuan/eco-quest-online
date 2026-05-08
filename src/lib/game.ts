@@ -19,6 +19,11 @@ export interface Tile {
   plantedAt?: number;
   threat?: ThreatKind;
   threatExpiresAt?: number;
+  // Named-tree memorial layer (Batch 1)
+  name?: string;
+  birthAt?: number;          // first time tile reached mature (or planted)
+  threatsSurvived?: number;
+  o2Produced?: number;
 }
 
 // ---------- Grid ----------

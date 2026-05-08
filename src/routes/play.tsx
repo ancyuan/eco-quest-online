@@ -36,6 +36,8 @@ import {
 import { useView3D, isWebGLAvailable } from "@/lib/view3d";
 import { ErrorBoundary3D } from "@/three/ErrorBoundary3D";
 import { contributeToGroveQuest } from "@/lib/grove";
+import { setAmbient, playSfx, type AmbientName } from "@/lib/audio";
+import { TreeNameModal, TreeDossier } from "@/components/TreeNameModal";
 
 // Lazy-load 3D scene so the ~200KB three.js bundle isn't pulled into the initial /play chunk
 const Forest3D = lazy(() => import("@/three/Forest3D"));
@@ -64,6 +66,15 @@ function PlayPage() {
   const { prefs, update: updatePrefs } = usePreferences();
   const weatherState = useWeather();
   const weather = weatherState.weather;
+
+  // Ambient soundscape follows weather (cleans up on unmount)
+  useEffect(() => {
+    const map: Record<string, AmbientName> = {
+      sunny: "sunny", fog: "sunny", rain: "rain", storm: "storm",
+    };
+    setAmbient(map[weather] ?? "sunny");
+    return () => { setAmbient(null); };
+  }, [weather]);
   const view3d = useView3D();
   const webgl = useMemo(() => isWebGLAvailable(), []);
   const use3D = view3d.enabled && webgl;
@@ -74,6 +85,10 @@ function PlayPage() {
   const [tiles, setTiles] = useState<Tile[]>(() =>
     Array.from({ length: 36 }, (_, i) => ({ index: i }))
   );
+  // Naming modal: opens once per tile when it first becomes mature & not yet named
+  const [namingTile, setNamingTile] = useState<Tile | null>(null);
+  const [skippedNaming, setSkippedNaming] = useState<Set<number>>(() => new Set());
+  const [dossierTile, setDossierTile] = useState<Tile | null>(null);
   const [energy, setEnergy] = useState(10);
   const [oxygen, setOxygen] = useState(0);
   const [treesSaved, setTreesSaved] = useState(0);
@@ -398,14 +413,41 @@ function PlayPage() {
       setTiles((prev) => {
         const next = prev.map((t) => {
           if (!t.kind || !t.plantedAt) return t;
-          if (t.threat && t.threatExpiresAt && t.threatExpiresAt <= now) return { index: t.index };
+          if (t.threat && t.threatExpiresAt && t.threatExpiresAt <= now) {
+            // Tree died from un-defended threat. Memorialize if it had a name.
+            if (t.name && user) {
+              void supabase.from("tree_memorials").insert({
+                user_id: user.id,
+                name: t.name,
+                kind: t.kind,
+                birth_at: new Date(t.birthAt ?? t.plantedAt!).toISOString(),
+                cause: t.threat,
+                threats_survived: t.threatsSurvived ?? 0,
+                o2_produced: t.o2Produced ?? 0,
+                tile_index: t.index,
+              });
+              setAcorns((a) => a + 5);
+              toast(`🪦 ${t.name} telah gugur`, { description: "+5 🌰 mengenang" });
+            }
+            return { index: t.index };
+          }
           const isAncient = t.stage === "ancient";
           const biome = biomeForTile(biomeZones, t.index);
+          const prevStage = t.stage;
           const stage = computeStageEff(t.plantedAt, now, t.kind, biome, weather, skills, activeCompanions, isAncient);
           let updated: Tile = { ...t, stage };
+          // Set birthAt the first time the tree reaches mature stage
+          if (stage === "mature" && prevStage !== "mature" && prevStage !== "ancient" && !t.birthAt) {
+            updated.birthAt = now;
+            // Trigger naming modal once per tile (skip if user already declined)
+            if (!t.name && !skippedNaming.has(t.index)) {
+              queueMicrotask(() => setNamingTile((cur) => cur ?? updated));
+            }
+          }
           if ((stage === "mature" || stage === "ancient") && !t.threat && Math.random() < threatProb) {
             const newThreat = randomThreat();
             updated = { ...updated, threat: newThreat, threatExpiresAt: now + threatWindow };
+            playSfx("threat");
             if (prefs.notifications_enabled && (now - (lastNotifiedRef.current[t.index] ?? 0)) > 30_000) {
               lastNotifiedRef.current[t.index] = now;
               notify("🌳 Forest Guardian", `${THREATS[newThreat].emoji} ${THREATS[newThreat].label} attacking your tree!`);
@@ -435,6 +477,7 @@ function PlayPage() {
           setXp(x => x + XP_DEFEND);
           emitQuestEvent({ type: "defend" });
           contributeToGroveQuest("defend_threats", 1);
+          playSfx("defend");
           toast.success("🛡️ Auto-defend triggered");
           return prev.map((t, i) => i === idx ? { ...t, threat: undefined, threatExpiresAt: undefined } : t);
         });
@@ -537,6 +580,7 @@ function PlayPage() {
       setEnergy(e => e - feedCost);
       setXp(x => x + XP_FEED);
       emitQuestEvent({ type: "feed" });
+      playSfx("water");
       setFeedLog(prev => {
         const next = { ...prev, [tile.index]: [...(prev[tile.index] ?? []), now] };
         // promote to ancient if ritual complete
@@ -560,41 +604,25 @@ function PlayPage() {
     // 1) defend threat
     if (tile.threat) {
       setTiles(prev => prev.map(t =>
-        t.index === tile.index ? { ...t, threat: undefined, threatExpiresAt: undefined } : t
+        t.index === tile.index
+          ? { ...t, threat: undefined, threatExpiresAt: undefined,
+              threatsSurvived: (t.threatsSurvived ?? 0) + 1 }
+          : t
       ));
       setTreesSaved(s => s + 1);
       setXp(x => x + XP_DEFEND);
       emitQuestEvent({ type: "defend" });
       contributeToGroveQuest("defend_threats", 1);
+      playSfx("defend");
       toast.success(`Saved your tree from ${THREATS[tile.threat].label.toLowerCase()}!`);
       return;
     }
 
     // 2) harvest mature/ancient
     if (tile.kind && (tile.stage === "mature" || tile.stage === "ancient")) {
-      const biome = biomeForTile(biomeZones, tile.index);
-      const isAncient = tile.stage === "ancient";
-      const synergy = synergyMultiplier(tiles, gridSize, tile.index, tile.kind);
-      const gain = harvestYieldFull({
-        kind: tile.kind, biome, isAncient,
-        weather, skills, companions: activeCompanions, synergyMul: synergy,
-      });
-      setOxygen(o => o + gain);
-      setEnergy(e => Math.min(maxEnergy, e + (isAncient ? 5 : 2)));
-      setXp(x => x + (isAncient ? XP_HARVEST_ANCIENT : XP_HARVEST));
-      // tally for companion unlocks
-      const harvestedKind = tile.kind;
-      setHarvestTally(prev => bumpTally(prev, harvestedKind, 1));
-      emitQuestEvent({ type: "harvest", kind: harvestedKind, biome, isAncient, oxygen: gain });
-      contributeToGroveQuest("harvest_o2", gain);
-      setAnimatingTiles(a => ({ ...a, [tile.index]: "harvest" }));
-      setConfettiTrigger(Date.now());
-      setTimeout(() => setAnimatingTiles(a => { const { [tile.index]: _, ...r } = a; return r; }), 400);
-      setTiles(prev => prev.map(t => t.index === tile.index ? { index: t.index } : t));
-      // clear feed log for that tile
-      setFeedLog(prev => { const { [tile.index]: _, ...r } = prev; return r; });
-      setFact(randomFact());
-      toast.success(`+${gain} 💨 oxygen${isAncient ? " (Ancient!)" : ""} • ${synergy > 1 ? `+${Math.round((synergy-1)*100)}% synergy` : ""}`);
+      // Named trees → open dossier first (let user appreciate before harvest)
+      if (tile.name) { setDossierTile(tile); return; }
+      harvestTile(tile);
       return;
     }
 
@@ -612,6 +640,7 @@ function PlayPage() {
       speciesPlantedRef.current.add(selectedKind);
       emitQuestEvent({ type: "plant", kind: selectedKind, biome });
       contributeToGroveQuest("plant_trees", 1);
+      playSfx("plant");
       setAnimatingTiles(a => ({ ...a, [tile.index]: "pop" }));
       setTimeout(() => setAnimatingTiles(a => { const { [tile.index]: _, ...r } = a; return r; }), 350);
       setTiles(prev => prev.map(t =>
@@ -620,6 +649,47 @@ function PlayPage() {
           : t
       ));
     }
+  };
+
+  // Extracted: harvest a single tile (used by direct click & dossier "Panen")
+  const harvestTile = (tile: Tile) => {
+    if (!tile.kind || (tile.stage !== "mature" && tile.stage !== "ancient")) return;
+      const biome = biomeForTile(biomeZones, tile.index);
+      const isAncient = tile.stage === "ancient";
+      const synergy = synergyMultiplier(tiles, gridSize, tile.index, tile.kind);
+      const gain = harvestYieldFull({
+        kind: tile.kind, biome, isAncient,
+        weather, skills, companions: activeCompanions, synergyMul: synergy,
+      });
+      setOxygen(o => o + gain);
+      setEnergy(e => Math.min(maxEnergy, e + (isAncient ? 5 : 2)));
+      setXp(x => x + (isAncient ? XP_HARVEST_ANCIENT : XP_HARVEST));
+      playSfx(isAncient ? "harvest_ancient" : "harvest");
+      // tally for companion unlocks
+      const harvestedKind = tile.kind;
+      setHarvestTally(prev => bumpTally(prev, harvestedKind, 1));
+      emitQuestEvent({ type: "harvest", kind: harvestedKind, biome, isAncient, oxygen: gain });
+      contributeToGroveQuest("harvest_o2", gain);
+      setAnimatingTiles(a => ({ ...a, [tile.index]: "harvest" }));
+      setConfettiTrigger(Date.now());
+      setTimeout(() => setAnimatingTiles(a => { const { [tile.index]: _, ...r } = a; return r; }), 400);
+      // Named trees survive harvest (keep identity + counters; regrow from seed).
+      setTiles(prev => prev.map(t => {
+        if (t.index !== tile.index) return t;
+        if (t.name) {
+          return {
+            index: t.index, name: t.name, kind: t.kind, birthAt: t.birthAt,
+            threatsSurvived: t.threatsSurvived,
+            o2Produced: (t.o2Produced ?? 0) + gain,
+            plantedAt: Date.now(), stage: "seed",
+          };
+        }
+        return { index: t.index };
+      }));
+      // clear feed log for that tile
+      setFeedLog(prev => { const { [tile.index]: _, ...r } = prev; return r; });
+      setFact(randomFact());
+      toast.success(`+${gain} 💨 oxygen${isAncient ? " (Ancient!)" : ""} • ${synergy > 1 ? `+${Math.round((synergy-1)*100)}% synergy` : ""}`);
   };
 
   const handleQuickPlant = () => {
@@ -679,6 +749,7 @@ function PlayPage() {
       const gained = lvl - lastLevelRef.current;
       lastLevelRef.current = lvl;
       setSkillPoints(p => p + gained);
+      playSfx("levelup");
       toast.success(`🎉 Level ${lvl}!`, { description: `+${gained} skill point` });
     }
   }, [levelInfo.level, hydrated]);
@@ -998,6 +1069,34 @@ function PlayPage() {
         streak={streak}
         onClaim={handleClaimStreak}
       />
+
+      <TreeNameModal
+        open={!!namingTile}
+        kind={namingTile?.kind}
+        onConfirm={(name) => {
+          if (!namingTile) return;
+          setTiles(prev => prev.map(t =>
+            t.index === namingTile.index ? { ...t, name } : t
+          ));
+          toast.success(`🌱 Diberi nama: ${name}`);
+          setNamingTile(null);
+        }}
+        onSkip={() => {
+          if (namingTile) setSkippedNaming(s => { const n = new Set(s); n.add(namingTile.index); return n; });
+          setNamingTile(null);
+        }}
+      />
+      {dossierTile && (
+        <TreeDossier
+          tile={dossierTile}
+          onClose={() => setDossierTile(null)}
+          onHarvest={() => {
+            // Re-resolve tile (it may have changed since dossier opened)
+            const fresh = tiles.find(t => t.index === dossierTile.index);
+            if (fresh) harvestTile(fresh);
+          }}
+        />
+      )}
     </main>
   );
 }
@@ -1064,6 +1163,11 @@ function TileButton({
       )}
       {ancient && (
         <div className="absolute right-0.5 top-0.5 text-[10px]">✨</div>
+      )}
+      {tile.name && (
+        <div className="absolute bottom-0.5 left-1/2 max-w-[90%] -translate-x-1/2 truncate rounded bg-background/80 px-1 text-[9px] font-medium text-foreground shadow-sm">
+          {tile.name}
+        </div>
       )}
       {empty && (
         <span className="pointer-events-none absolute inset-0 flex items-center justify-center text-lg opacity-0 transition-opacity group-hover:opacity-40">+</span>
