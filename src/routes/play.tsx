@@ -439,6 +439,10 @@ function PlayPage() {
           // Set birthAt the first time the tree reaches mature stage
           if (stage === "mature" && prevStage !== "mature" && prevStage !== "ancient" && !t.birthAt) {
             updated.birthAt = now;
+            // Trigger naming modal once per tile (skip if user already declined)
+            if (!t.name && !skippedNaming.has(t.index)) {
+              queueMicrotask(() => setNamingTile((cur) => cur ?? updated));
+            }
           }
           if ((stage === "mature" || stage === "ancient") && !t.threat && Math.random() < threatProb) {
             const newThreat = randomThreat();
