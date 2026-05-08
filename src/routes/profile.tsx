@@ -236,6 +236,31 @@ function ProfilePage() {
             </button>
           </div>
 
+          {memorials.length > 0 && (
+            <div className="mt-6 border-t border-border pt-4">
+              <h3 className="mb-2 text-sm font-semibold text-foreground">🪦 Memorial</h3>
+              <ul className="space-y-2">
+                {memorials.map((m) => {
+                  const def = TREES[m.kind as keyof typeof TREES];
+                  const lifespan = new Date(m.died_at).getTime() - new Date(m.birth_at).getTime();
+                  const days = Math.max(0, Math.floor(lifespan / 86_400_000));
+                  const hours = Math.floor((lifespan % 86_400_000) / 3_600_000);
+                  return (
+                    <li key={m.id} className="flex items-center gap-3 rounded-lg border border-border bg-secondary/30 px-3 py-2">
+                      <div className="text-2xl">{def?.emoji.mature ?? "🌳"}</div>
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-sm font-medium text-foreground">{m.name}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {def?.label ?? m.kind} · {days}h {hours}j · selamat {m.threats_survived}× · {m.o2_produced} O₂
+                        </div>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
+
           <div className="mt-6 border-t border-border pt-4">
             {isWalletUser ? (
               <p className="font-mono text-xs text-muted-foreground">
