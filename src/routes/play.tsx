@@ -37,6 +37,7 @@ import { useView3D, isWebGLAvailable } from "@/lib/view3d";
 import { ErrorBoundary3D } from "@/three/ErrorBoundary3D";
 import { contributeToGroveQuest } from "@/lib/grove";
 import { setAmbient, playSfx, type AmbientName } from "@/lib/audio";
+import { TreeNameModal, TreeDossier } from "@/components/TreeNameModal";
 
 // Lazy-load 3D scene so the ~200KB three.js bundle isn't pulled into the initial /play chunk
 const Forest3D = lazy(() => import("@/three/Forest3D"));
@@ -84,6 +85,10 @@ function PlayPage() {
   const [tiles, setTiles] = useState<Tile[]>(() =>
     Array.from({ length: 36 }, (_, i) => ({ index: i }))
   );
+  // Naming modal: opens once per tile when it first becomes mature & not yet named
+  const [namingTile, setNamingTile] = useState<Tile | null>(null);
+  const [skippedNaming, setSkippedNaming] = useState<Set<number>>(() => new Set());
+  const [dossierTile, setDossierTile] = useState<Tile | null>(null);
   const [energy, setEnergy] = useState(10);
   const [oxygen, setOxygen] = useState(0);
   const [treesSaved, setTreesSaved] = useState(0);
@@ -408,11 +413,33 @@ function PlayPage() {
       setTiles((prev) => {
         const next = prev.map((t) => {
           if (!t.kind || !t.plantedAt) return t;
-          if (t.threat && t.threatExpiresAt && t.threatExpiresAt <= now) return { index: t.index };
+          if (t.threat && t.threatExpiresAt && t.threatExpiresAt <= now) {
+            // Tree died from un-defended threat. Memorialize if it had a name.
+            if (t.name && user) {
+              void supabase.from("tree_memorials").insert({
+                user_id: user.id,
+                name: t.name,
+                kind: t.kind,
+                birth_at: new Date(t.birthAt ?? t.plantedAt!).toISOString(),
+                cause: t.threat,
+                threats_survived: t.threatsSurvived ?? 0,
+                o2_produced: t.o2Produced ?? 0,
+                tile_index: t.index,
+              });
+              setAcorns((a) => a + 5);
+              toast(`🪦 ${t.name} telah gugur`, { description: "+5 🌰 mengenang" });
+            }
+            return { index: t.index };
+          }
           const isAncient = t.stage === "ancient";
           const biome = biomeForTile(biomeZones, t.index);
+          const prevStage = t.stage;
           const stage = computeStageEff(t.plantedAt, now, t.kind, biome, weather, skills, activeCompanions, isAncient);
           let updated: Tile = { ...t, stage };
+          // Set birthAt the first time the tree reaches mature stage
+          if (stage === "mature" && prevStage !== "mature" && prevStage !== "ancient" && !t.birthAt) {
+            updated.birthAt = now;
+          }
           if ((stage === "mature" || stage === "ancient") && !t.threat && Math.random() < threatProb) {
             const newThreat = randomThreat();
             updated = { ...updated, threat: newThreat, threatExpiresAt: now + threatWindow };
