@@ -416,6 +416,7 @@ function PlayPage() {
           if ((stage === "mature" || stage === "ancient") && !t.threat && Math.random() < threatProb) {
             const newThreat = randomThreat();
             updated = { ...updated, threat: newThreat, threatExpiresAt: now + threatWindow };
+            playSfx("threat");
             if (prefs.notifications_enabled && (now - (lastNotifiedRef.current[t.index] ?? 0)) > 30_000) {
               lastNotifiedRef.current[t.index] = now;
               notify("🌳 Forest Guardian", `${THREATS[newThreat].emoji} ${THREATS[newThreat].label} attacking your tree!`);
@@ -445,6 +446,7 @@ function PlayPage() {
           setXp(x => x + XP_DEFEND);
           emitQuestEvent({ type: "defend" });
           contributeToGroveQuest("defend_threats", 1);
+          playSfx("defend");
           toast.success("🛡️ Auto-defend triggered");
           return prev.map((t, i) => i === idx ? { ...t, threat: undefined, threatExpiresAt: undefined } : t);
         });
@@ -547,6 +549,7 @@ function PlayPage() {
       setEnergy(e => e - feedCost);
       setXp(x => x + XP_FEED);
       emitQuestEvent({ type: "feed" });
+      playSfx("water");
       setFeedLog(prev => {
         const next = { ...prev, [tile.index]: [...(prev[tile.index] ?? []), now] };
         // promote to ancient if ritual complete
@@ -576,6 +579,7 @@ function PlayPage() {
       setXp(x => x + XP_DEFEND);
       emitQuestEvent({ type: "defend" });
       contributeToGroveQuest("defend_threats", 1);
+      playSfx("defend");
       toast.success(`Saved your tree from ${THREATS[tile.threat].label.toLowerCase()}!`);
       return;
     }
@@ -592,6 +596,7 @@ function PlayPage() {
       setOxygen(o => o + gain);
       setEnergy(e => Math.min(maxEnergy, e + (isAncient ? 5 : 2)));
       setXp(x => x + (isAncient ? XP_HARVEST_ANCIENT : XP_HARVEST));
+      playSfx(isAncient ? "harvest_ancient" : "harvest");
       // tally for companion unlocks
       const harvestedKind = tile.kind;
       setHarvestTally(prev => bumpTally(prev, harvestedKind, 1));
@@ -622,6 +627,7 @@ function PlayPage() {
       speciesPlantedRef.current.add(selectedKind);
       emitQuestEvent({ type: "plant", kind: selectedKind, biome });
       contributeToGroveQuest("plant_trees", 1);
+      playSfx("plant");
       setAnimatingTiles(a => ({ ...a, [tile.index]: "pop" }));
       setTimeout(() => setAnimatingTiles(a => { const { [tile.index]: _, ...r } = a; return r; }), 350);
       setTiles(prev => prev.map(t =>
