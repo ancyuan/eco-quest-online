@@ -169,6 +169,41 @@ function ProfilePage() {
               checked={prefs.notifications_enabled}
               onChange={(v) => updatePrefs({ notifications_enabled: v })}
             />
+            <PrefRow
+              label="🔇 Mute all audio"
+              hint="Silence ambient + sound effects"
+              checked={prefs.audio_muted}
+              onChange={(v) => updatePrefs({ audio_muted: v })}
+            />
+            <SliderRow
+              label="🎵 Music volume"
+              value={prefs.audio_music}
+              onChange={(v) => updatePrefs({ audio_music: v })}
+            />
+            <SliderRow
+              label="🔊 Sound effects"
+              value={prefs.audio_sfx}
+              onChange={(v) => updatePrefs({ audio_sfx: v })}
+            />
+            <div className="rounded-lg border border-border bg-secondary/30 px-3 py-2">
+              <div className="text-sm font-medium text-foreground">🌐 Language</div>
+              <div className="text-xs text-muted-foreground">For daily haiku & weekly recap</div>
+              <div className="mt-2 flex gap-2">
+                {(["id","en"] as const).map((l) => (
+                  <button
+                    key={l}
+                    onClick={() => updatePrefs({ language: l })}
+                    className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${
+                      prefs.language === l
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-background text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {l === "id" ? "Bahasa Indonesia" : "English"}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
 
           <div className="mt-6 border-t border-border pt-4">
@@ -239,5 +274,33 @@ function PrefRow({
         onChange={(e) => onChange(e.target.checked)}
       />
     </label>
+  );
+}
+
+function SliderRow({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  onChange: (v: number) => void;
+}) {
+  return (
+    <div className="rounded-lg border border-border bg-secondary/30 px-3 py-2">
+      <div className="flex items-center justify-between">
+        <div className="text-sm font-medium text-foreground">{label}</div>
+        <div className="text-xs tabular-nums text-muted-foreground">{value}%</div>
+      </div>
+      <input
+        type="range"
+        min={0}
+        max={100}
+        step={5}
+        value={value}
+        onChange={(e) => onChange(parseInt(e.target.value, 10))}
+        className="mt-1 w-full accent-[var(--color-primary)]"
+      />
+    </div>
   );
 }
