@@ -53,8 +53,12 @@ export function TreeNameModal({ open, kind, onConfirm, onSkip }: Props) {
 }
 
 export function TreeDossier({
-  tile, onClose,
-}: { tile: { name?: string; kind?: TreeKind; stage?: string; birthAt?: number; threatsSurvived?: number; o2Produced?: number }; onClose: () => void }) {
+  tile, onClose, onHarvest,
+}: {
+  tile: { name?: string; kind?: TreeKind; stage?: string; birthAt?: number; threatsSurvived?: number; o2Produced?: number };
+  onClose: () => void;
+  onHarvest?: () => void;
+}) {
   if (!tile.name || !tile.kind) return null;
   const def = TREES[tile.kind];
   const ageMs = tile.birthAt ? Date.now() - tile.birthAt : 0;
@@ -77,12 +81,22 @@ export function TreeDossier({
           <Stat label="Selamat" value={`${tile.threatsSurvived ?? 0}×`} />
           <Stat label="O₂" value={`${tile.o2Produced ?? 0}`} />
         </div>
-        <button
-          onClick={onClose}
-          className="mt-4 w-full rounded-lg bg-secondary px-4 py-2 text-sm font-medium text-foreground hover:bg-secondary/80"
-        >
-          Tutup
-        </button>
+        <div className="mt-4 flex gap-2">
+          <button
+            onClick={onClose}
+            className="flex-1 rounded-lg bg-secondary px-4 py-2 text-sm font-medium text-foreground hover:bg-secondary/80"
+          >
+            Tutup
+          </button>
+          {onHarvest && (tile.stage === "mature" || tile.stage === "ancient") && (
+            <button
+              onClick={() => { onHarvest(); onClose(); }}
+              className="flex-1 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
+            >
+              🌾 Panen
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
