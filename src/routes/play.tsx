@@ -695,6 +695,7 @@ function PlayPage() {
       const gained = lvl - lastLevelRef.current;
       lastLevelRef.current = lvl;
       setSkillPoints(p => p + gained);
+      playSfx("levelup");
       toast.success(`🎉 Level ${lvl}!`, { description: `+${gained} skill point` });
     }
   }, [levelInfo.level, hydrated]);
