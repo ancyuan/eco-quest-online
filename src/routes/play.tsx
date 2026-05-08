@@ -673,13 +673,16 @@ function PlayPage() {
       setAnimatingTiles(a => ({ ...a, [tile.index]: "harvest" }));
       setConfettiTrigger(Date.now());
       setTimeout(() => setAnimatingTiles(a => { const { [tile.index]: _, ...r } = a; return r; }), 400);
-      // Named trees survive harvest (keep name + counters); empty trees fully clear.
+      // Named trees survive harvest (keep identity + counters; regrow from seed).
       setTiles(prev => prev.map(t => {
         if (t.index !== tile.index) return t;
         if (t.name) {
-          return { index: t.index, name: t.name, kind: t.kind, birthAt: t.birthAt,
-                   threatsSurvived: t.threatsSurvived,
-                   o2Produced: (t.o2Produced ?? 0) + gain };
+          return {
+            index: t.index, name: t.name, kind: t.kind, birthAt: t.birthAt,
+            threatsSurvived: t.threatsSurvived,
+            o2Produced: (t.o2Produced ?? 0) + gain,
+            plantedAt: Date.now(), stage: "seed",
+          };
         }
         return { index: t.index };
       }));
