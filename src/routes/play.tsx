@@ -36,6 +36,7 @@ import {
 import { useView3D, isWebGLAvailable } from "@/lib/view3d";
 import { ErrorBoundary3D } from "@/three/ErrorBoundary3D";
 import { contributeToGroveQuest } from "@/lib/grove";
+import { setAmbient, playSfx, type AmbientName } from "@/lib/audio";
 
 // Lazy-load 3D scene so the ~200KB three.js bundle isn't pulled into the initial /play chunk
 const Forest3D = lazy(() => import("@/three/Forest3D"));
@@ -64,6 +65,15 @@ function PlayPage() {
   const { prefs, update: updatePrefs } = usePreferences();
   const weatherState = useWeather();
   const weather = weatherState.weather;
+
+  // Ambient soundscape follows weather (cleans up on unmount)
+  useEffect(() => {
+    const map: Record<string, AmbientName> = {
+      sunny: "sunny", fog: "sunny", rain: "rain", storm: "storm",
+    };
+    setAmbient(map[weather] ?? "sunny");
+    return () => { setAmbient(null); };
+  }, [weather]);
   const view3d = useView3D();
   const webgl = useMemo(() => isWebGLAvailable(), []);
   const use3D = view3d.enabled && webgl;
