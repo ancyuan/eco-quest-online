@@ -1069,6 +1069,34 @@ function PlayPage() {
         streak={streak}
         onClaim={handleClaimStreak}
       />
+
+      <TreeNameModal
+        open={!!namingTile}
+        kind={namingTile?.kind}
+        onConfirm={(name) => {
+          if (!namingTile) return;
+          setTiles(prev => prev.map(t =>
+            t.index === namingTile.index ? { ...t, name } : t
+          ));
+          toast.success(`🌱 Diberi nama: ${name}`);
+          setNamingTile(null);
+        }}
+        onSkip={() => {
+          if (namingTile) setSkippedNaming(s => { const n = new Set(s); n.add(namingTile.index); return n; });
+          setNamingTile(null);
+        }}
+      />
+      {dossierTile && (
+        <TreeDossier
+          tile={dossierTile}
+          onClose={() => setDossierTile(null)}
+          onHarvest={() => {
+            // Re-resolve tile (it may have changed since dossier opened)
+            const fresh = tiles.find(t => t.index === dossierTile.index);
+            if (fresh) harvestTile(fresh);
+          }}
+        />
+      )}
     </main>
   );
 }
