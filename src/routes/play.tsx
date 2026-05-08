@@ -604,7 +604,10 @@ function PlayPage() {
     // 1) defend threat
     if (tile.threat) {
       setTiles(prev => prev.map(t =>
-        t.index === tile.index ? { ...t, threat: undefined, threatExpiresAt: undefined } : t
+        t.index === tile.index
+          ? { ...t, threat: undefined, threatExpiresAt: undefined,
+              threatsSurvived: (t.threatsSurvived ?? 0) + 1 }
+          : t
       ));
       setTreesSaved(s => s + 1);
       setXp(x => x + XP_DEFEND);
@@ -617,30 +620,9 @@ function PlayPage() {
 
     // 2) harvest mature/ancient
     if (tile.kind && (tile.stage === "mature" || tile.stage === "ancient")) {
-      const biome = biomeForTile(biomeZones, tile.index);
-      const isAncient = tile.stage === "ancient";
-      const synergy = synergyMultiplier(tiles, gridSize, tile.index, tile.kind);
-      const gain = harvestYieldFull({
-        kind: tile.kind, biome, isAncient,
-        weather, skills, companions: activeCompanions, synergyMul: synergy,
-      });
-      setOxygen(o => o + gain);
-      setEnergy(e => Math.min(maxEnergy, e + (isAncient ? 5 : 2)));
-      setXp(x => x + (isAncient ? XP_HARVEST_ANCIENT : XP_HARVEST));
-      playSfx(isAncient ? "harvest_ancient" : "harvest");
-      // tally for companion unlocks
-      const harvestedKind = tile.kind;
-      setHarvestTally(prev => bumpTally(prev, harvestedKind, 1));
-      emitQuestEvent({ type: "harvest", kind: harvestedKind, biome, isAncient, oxygen: gain });
-      contributeToGroveQuest("harvest_o2", gain);
-      setAnimatingTiles(a => ({ ...a, [tile.index]: "harvest" }));
-      setConfettiTrigger(Date.now());
-      setTimeout(() => setAnimatingTiles(a => { const { [tile.index]: _, ...r } = a; return r; }), 400);
-      setTiles(prev => prev.map(t => t.index === tile.index ? { index: t.index } : t));
-      // clear feed log for that tile
-      setFeedLog(prev => { const { [tile.index]: _, ...r } = prev; return r; });
-      setFact(randomFact());
-      toast.success(`+${gain} 💨 oxygen${isAncient ? " (Ancient!)" : ""} • ${synergy > 1 ? `+${Math.round((synergy-1)*100)}% synergy` : ""}`);
+      // Named trees → open dossier first (let user appreciate before harvest)
+      if (tile.name) { setDossierTile(tile); return; }
+      harvestTile(tile);
       return;
     }
 
@@ -667,6 +649,44 @@ function PlayPage() {
           : t
       ));
     }
+  };
+
+  // Extracted: harvest a single tile (used by direct click & dossier "Panen")
+  const harvestTile = (tile: Tile) => {
+    if (!tile.kind || (tile.stage !== "mature" && tile.stage !== "ancient")) return;
+      const biome = biomeForTile(biomeZones, tile.index);
+      const isAncient = tile.stage === "ancient";
+      const synergy = synergyMultiplier(tiles, gridSize, tile.index, tile.kind);
+      const gain = harvestYieldFull({
+        kind: tile.kind, biome, isAncient,
+        weather, skills, companions: activeCompanions, synergyMul: synergy,
+      });
+      setOxygen(o => o + gain);
+      setEnergy(e => Math.min(maxEnergy, e + (isAncient ? 5 : 2)));
+      setXp(x => x + (isAncient ? XP_HARVEST_ANCIENT : XP_HARVEST));
+      playSfx(isAncient ? "harvest_ancient" : "harvest");
+      // tally for companion unlocks
+      const harvestedKind = tile.kind;
+      setHarvestTally(prev => bumpTally(prev, harvestedKind, 1));
+      emitQuestEvent({ type: "harvest", kind: harvestedKind, biome, isAncient, oxygen: gain });
+      contributeToGroveQuest("harvest_o2", gain);
+      setAnimatingTiles(a => ({ ...a, [tile.index]: "harvest" }));
+      setConfettiTrigger(Date.now());
+      setTimeout(() => setAnimatingTiles(a => { const { [tile.index]: _, ...r } = a; return r; }), 400);
+      // Named trees survive harvest (keep name + counters); empty trees fully clear.
+      setTiles(prev => prev.map(t => {
+        if (t.index !== tile.index) return t;
+        if (t.name) {
+          return { index: t.index, name: t.name, kind: t.kind, birthAt: t.birthAt,
+                   threatsSurvived: t.threatsSurvived,
+                   o2Produced: (t.o2Produced ?? 0) + gain };
+        }
+        return { index: t.index };
+      }));
+      // clear feed log for that tile
+      setFeedLog(prev => { const { [tile.index]: _, ...r } = prev; return r; });
+      setFact(randomFact());
+      toast.success(`+${gain} 💨 oxygen${isAncient ? " (Ancient!)" : ""} • ${synergy > 1 ? `+${Math.round((synergy-1)*100)}% synergy` : ""}`);
   };
 
   const handleQuickPlant = () => {
