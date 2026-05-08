@@ -1164,6 +1164,11 @@ function TileButton({
       {ancient && (
         <div className="absolute right-0.5 top-0.5 text-[10px]">✨</div>
       )}
+      {tile.name && (
+        <div className="absolute bottom-0.5 left-1/2 max-w-[90%] -translate-x-1/2 truncate rounded bg-background/80 px-1 text-[9px] font-medium text-foreground shadow-sm">
+          {tile.name}
+        </div>
+      )}
       {empty && (
         <span className="pointer-events-none absolute inset-0 flex items-center justify-center text-lg opacity-0 transition-opacity group-hover:opacity-40">+</span>
       )}
