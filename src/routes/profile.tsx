@@ -5,6 +5,7 @@ import { useAuth } from "@/lib/auth";
 import { toast } from "sonner";
 import { disconnectWallet } from "@/lib/wallet";
 import { usePreferences } from "@/lib/preferences";
+import { TREES } from "@/lib/game";
 
 export const Route = createFileRoute("/profile")({
   head: () => ({
@@ -25,6 +26,17 @@ interface Profile {
   skill_points?: number;
 }
 
+interface Memorial {
+  id: string;
+  name: string;
+  kind: string;
+  birth_at: string;
+  died_at: string;
+  cause: string;
+  threats_survived: number;
+  o2_produced: number;
+}
+
 function ProfilePage() {
   const { user, loading, signOut } = useAuth();
   const navigate = useNavigate();
@@ -34,6 +46,7 @@ function ProfilePage() {
   const [saving, setSaving] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
   const [resetting, setResetting] = useState(false);
+  const [memorials, setMemorials] = useState<Memorial[]>([]);
 
   const walletAddress = (user?.user_metadata?.wallet_address as string | undefined) ?? null;
   const isWalletUser = !!walletAddress;
@@ -55,6 +68,13 @@ function ProfilePage() {
           setName(data.display_name);
         }
       });
+    supabase
+      .from("tree_memorials")
+      .select("id, name, kind, birth_at, died_at, cause, threats_survived, o2_produced")
+      .eq("user_id", user.id)
+      .order("died_at", { ascending: false })
+      .limit(10)
+      .then(({ data }) => { if (data) setMemorials(data as Memorial[]); });
   }, [user]);
 
   const handleSave = async () => {
